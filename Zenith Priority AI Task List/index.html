@@ -1,0 +1,1164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Zenith Priority Board</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --col-pro-bg: rgba(23, 90, 165, 0.05);
+  --col-per-bg: rgba(136, 135, 128, 0.07);
+  --col-rem-bg: rgba(0, 0, 0, 0.06);
+  --toolbar-h: 48px;
+  --filter-h: 40px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  background: #f0efe9;
+  overflow: hidden;
+  height: 100vh;
+}
+
+/* ── Toolbar ── */
+#toolbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  height: var(--toolbar-h);
+  background: #1a1a18;
+  display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+
+#app-title {
+  color: #e8e6de; font-size: 14px; font-weight: 600;
+  margin-right: 8px; white-space: nowrap;
+}
+
+.toolbar-divider {
+  width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 4px;
+}
+
+.zoom-controls { display: flex; align-items: center; gap: 4px; }
+.zoom-btn {
+  background: rgba(255,255,255,0.1); border: none; color: #ccc;
+  width: 26px; height: 26px; border-radius: 5px; cursor: pointer;
+  font-size: 15px; display: flex; align-items: center; justify-content: center;
+}
+.zoom-btn:hover { background: rgba(255,255,255,0.18); }
+#zoom-label { color: #aaa; font-size: 12px; min-width: 38px; text-align: center; }
+
+.toolbar-spacer { flex: 1; }
+
+.tb-btn {
+  background: rgba(255,255,255,0.09); border: 1px solid rgba(255,255,255,0.13);
+  color: #d8d6ce; padding: 5px 11px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; white-space: nowrap; transition: background 0.15s;
+}
+.tb-btn:hover { background: rgba(255,255,255,0.16); }
+
+#btn-add-task {
+  background: #2563eb; border: none; color: #fff;
+  padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  font-size: 13px; font-weight: 500; white-space: nowrap;
+}
+#btn-add-task:hover { background: #1d4ed8; }
+
+#btn-settings {
+  background: none; border: none; color: #888; cursor: pointer;
+  font-size: 16px; padding: 4px; border-radius: 4px;
+}
+#btn-settings:hover { color: #ccc; }
+
+/* ── Filter bar ── */
+#filter-bar {
+  position: fixed; top: var(--toolbar-h); left: 0; right: 0; z-index: 99;
+  height: var(--filter-h);
+  background: #e8e6de; border-bottom: 1px solid #d5d3cb;
+  display: flex; align-items: center; gap: 6px; padding: 0 14px;
+}
+
+#filter-bar label { color: #666; font-size: 11px; font-weight: 500; margin-right: 4px; }
+
+.filter-pill {
+  padding: 3px 11px; border-radius: 99px; border: 2px solid transparent;
+  cursor: pointer; font-size: 11px; font-weight: 500; transition: border-color 0.12s;
+  background: #d4d2ca; color: #444;
+}
+.filter-pill.active { border-color: #1a1a18; }
+.filter-pill[data-cat="sales"]     { background: #F5C4B3; color: #712B13; }
+.filter-pill[data-cat="marketing"] { background: #B5D4F4; color: #0C447C; }
+.filter-pill[data-cat="bizdev"]    { background: #C0DD97; color: #27500A; }
+.filter-pill[data-cat="editing"]   { background: #CECBF6; color: #3C3489; }
+.filter-pill[data-cat="health"]    { background: #9FE1CB; color: #085041; }
+.filter-pill[data-cat="personal"]  { background: #E2E1DC; color: #3A3A38; }
+.filter-pill[data-cat="reminder"]  { background: #2C2C2A; color: #D3D1C7; }
+
+/* ── Scroll container ── */
+#scroll-wrap {
+  position: fixed;
+  top: calc(var(--toolbar-h) + var(--filter-h));
+  left: 0; right: 0;
+  bottom: 0;
+  overflow: auto;
+}
+
+/* ── Board ── */
+#board-outer { padding: 18px; min-width: 1230px; }
+
+#board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(400px, 1fr));
+  gap: 14px;
+  transform-origin: top left;
+}
+
+/* ── Column ── */
+.col {
+  border-radius: 12px;
+  padding: 0 0 12px;
+  min-height: 200px;
+}
+.col[data-col="professional"] { background: var(--col-pro-bg); }
+.col[data-col="personal"]     { background: var(--col-per-bg); }
+.col[data-col="reminders"]    { background: var(--col-rem-bg); }
+
+.col-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px 8px;
+}
+.col-title { font-size: 13px; font-weight: 600; color: #2a2a28; }
+.col-count {
+  background: rgba(0,0,0,0.1); color: #555;
+  font-size: 10px; font-weight: 600; border-radius: 99px;
+  padding: 1px 7px;
+}
+
+.quick-add {
+  margin: 0 10px 10px;
+  padding: 8px 10px;
+  border: 1.5px dashed #bbb; border-radius: 8px;
+  background: transparent;
+  font-size: 12px; color: #888;
+  outline: none; width: calc(100% - 20px);
+  transition: border-color 0.15s;
+}
+.quick-add:focus { border-color: #2563eb; color: #333; }
+
+.card-list {
+  padding: 0 10px;
+  min-height: 40px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.card-list.drag-over {
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 8px;
+  outline: 2px dashed rgba(37, 99, 235, 0.3);
+}
+
+/* ── Card ── */
+.card {
+  border-radius: 10px;
+  box-shadow: 0 2px 7px rgba(0,0,0,0.14), 0 0.5px 2px rgba(0,0,0,0.08);
+  cursor: grab; transition: box-shadow 0.15s, transform 0.15s;
+  position: relative; user-select: none;
+}
+.card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.1); }
+.card.dragging { opacity: 0.45; cursor: grabbing; transform: scale(0.97); }
+.card.drag-target { outline: 2px solid #2563eb; }
+
+.card[data-cat="sales"]     { background: #F5C4B3; color: #712B13; }
+.card[data-cat="marketing"] { background: #B5D4F4; color: #0C447C; }
+.card[data-cat="bizdev"]    { background: #C0DD97; color: #27500A; }
+.card[data-cat="editing"]   { background: #CECBF6; color: #3C3489; }
+.card[data-cat="health"]    { background: #9FE1CB; color: #085041; }
+.card[data-cat="personal"]  { background: #E2E1DC; color: #3A3A38; }
+.card[data-cat="reminder"]  { background: #2C2C2A; color: #D3D1C7; }
+
+.card-top {
+  display: flex; align-items: flex-start; gap: 7px;
+  padding: 10px 10px 6px;
+}
+.card-emoji { font-size: 17px; flex-shrink: 0; line-height: 1.3; }
+.card-title {
+  flex: 1; font-size: 13px; font-weight: 500; line-height: 1.45;
+  outline: none; word-break: break-word;
+  color: inherit;
+}
+.card-title[contenteditable="true"]:focus {
+  background: rgba(255,255,255,0.25); border-radius: 4px; padding: 1px 3px;
+}
+
+.btn-done {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  border: 1.5px solid currentColor; background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; opacity: 0.55; color: inherit;
+  transition: opacity 0.15s, background 0.15s;
+}
+.btn-done:hover { opacity: 1; background: rgba(255,255,255,0.25); }
+
+.card-notes-wrap {
+  display: none; padding: 0 10px 6px;
+}
+.card-notes-wrap.open { display: block; }
+.card-notes {
+  background: rgba(255,255,255,0.22); border-radius: 6px;
+  padding: 6px 8px; font-size: 12px; line-height: 1.5;
+  min-height: 36px; outline: none; word-break: break-word;
+  color: inherit;
+}
+.card-notes:focus { background: rgba(255,255,255,0.32); }
+.card-notes:empty::before { content: 'Add notes…'; opacity: 0.45; }
+
+.card-footer {
+  display: flex; align-items: center; gap: 5px;
+  padding: 4px 10px 8px;
+}
+.card-priority { font-size: 10px; opacity: 0.5; min-width: 18px; color: inherit; }
+
+.btn-cat {
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 2px 7px; border-radius: 99px;
+  border: none; cursor: pointer; opacity: 0.75;
+  background: rgba(255,255,255,0.25); color: inherit;
+  transition: opacity 0.12s;
+}
+.btn-cat:hover { opacity: 1; }
+.card[data-cat="reminder"] .btn-cat { background: rgba(255,255,255,0.12); }
+
+.btn-chevron {
+  background: none; border: none; cursor: pointer; padding: 2px 4px;
+  font-size: 11px; opacity: 0.45; color: inherit; margin-left: auto;
+  transition: transform 0.18s, opacity 0.12s;
+}
+.btn-chevron:hover { opacity: 0.8; }
+.btn-chevron.open { transform: rotate(180deg); }
+
+.btn-trash {
+  background: none; border: none; cursor: pointer; padding: 2px 4px;
+  font-size: 12px; opacity: 0.35; color: inherit;
+  transition: opacity 0.12s;
+}
+.btn-trash:hover { opacity: 0.75; }
+
+/* ── Category popup ── */
+.cat-popup {
+  position: absolute; bottom: calc(100% + 4px); left: 10px;
+  background: #fff; border-radius: 8px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.18); padding: 6px;
+  z-index: 200; min-width: 150px;
+}
+.cat-popup-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 5px; cursor: pointer;
+  font-size: 12px; color: #222;
+}
+.cat-popup-item:hover { background: #f0efe9; }
+.cat-dot {
+  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+}
+
+/* ── Archive ── */
+#archive-section { margin: 0 0 30px; padding: 0 18px; }
+#archive-toggle {
+  font-size: 12px; color: #666; cursor: pointer; padding: 8px 0;
+  display: flex; align-items: center; gap: 6px;
+  user-select: none;
+}
+#archive-toggle:hover { color: #333; }
+#archive-toggle::after { content: '▸'; transition: transform 0.18s; }
+#archive-toggle.open::after { transform: rotate(90deg); }
+
+#archive-grid {
+  display: none; grid-template-columns: repeat(3, minmax(400px, 1fr));
+  gap: 8px; margin-top: 8px;
+}
+#archive-grid.open { display: grid; }
+
+.archive-card {
+  background: #ddd; border-radius: 10px; padding: 10px 12px;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.archive-emoji { font-size: 16px; }
+.archive-info { flex: 1; }
+.archive-title { font-size: 12px; font-weight: 500; color: #333; }
+.archive-date { font-size: 10px; color: #888; margin-top: 2px; }
+.btn-restore {
+  font-size: 11px; padding: 3px 10px; border-radius: 5px;
+  border: 1px solid #bbb; background: #fff; cursor: pointer; color: #444;
+}
+.btn-restore:hover { background: #f0efe9; }
+
+/* ── Modals ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 500; display: flex; align-items: center; justify-content: center;
+}
+.modal-overlay.hidden { display: none; }
+
+.modal-box {
+  background: #fff; border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.22);
+  padding: 24px 28px; width: 440px; max-width: 95vw;
+}
+.modal-title { font-size: 16px; font-weight: 600; color: #1a1a18; margin-bottom: 18px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.field label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.field input, .field textarea, .field select {
+  border: 1.5px solid #ddd; border-radius: 7px; padding: 8px 10px;
+  font-size: 13px; outline: none; font-family: inherit; color: #1a1a18;
+  transition: border-color 0.15s;
+}
+.field input:focus, .field textarea:focus, .field select:focus { border-color: #2563eb; }
+.field textarea { resize: vertical; min-height: 70px; }
+
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
+.btn-cancel {
+  padding: 7px 16px; border-radius: 7px; border: 1.5px solid #ddd;
+  background: #fff; cursor: pointer; font-size: 13px; color: #444;
+}
+.btn-cancel:hover { background: #f5f5f3; }
+.btn-primary {
+  padding: 7px 18px; border-radius: 7px; border: none;
+  background: #2563eb; color: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
+}
+.btn-primary:hover { background: #1d4ed8; }
+
+/* ── AI Panel ── */
+#ai-panel {
+  position: fixed; right: -420px; top: var(--toolbar-h); bottom: 0;
+  width: 400px; background: #fff;
+  box-shadow: -4px 0 24px rgba(0,0,0,0.15);
+  z-index: 300; transition: right 0.25s ease; display: flex; flex-direction: column;
+}
+#ai-panel.open { right: 0; }
+#ai-panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 16px; border-bottom: 1px solid #eee;
+  background: #fafaf8;
+}
+#ai-panel-title { font-size: 14px; font-weight: 600; color: #1a1a18; }
+#btn-close-ai {
+  background: none; border: none; cursor: pointer; font-size: 18px; color: #888;
+  line-height: 1;
+}
+#btn-close-ai:hover { color: #333; }
+#ai-panel-content {
+  flex: 1; overflow-y: auto; padding: 16px;
+  font-size: 13px; line-height: 1.6; color: #333;
+  white-space: pre-wrap;
+}
+#ai-panel-content .ai-loading {
+  display: flex; align-items: center; gap: 8px; color: #888; padding: 20px 0;
+}
+.spinner {
+  width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: #2563eb;
+  border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* API key modal extra style */
+#api-modal .modal-box { width: 400px; }
+.api-note { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.5; }
+
+/* Done animation */
+@keyframes doneOut {
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.6; transform: scale(1.04); }
+  100% { opacity: 0; transform: scale(0.9); }
+}
+.card.done-anim { animation: doneOut 0.35s ease forwards; pointer-events: none; }
+
+/* Confirm mini modal */
+#confirm-modal .modal-box { width: 340px; }
+#confirm-msg { font-size: 13px; color: #444; margin-bottom: 18px; }
+</style>
+</head>
+<body>
+
+<!-- ── TOOLBAR ── -->
+<div id="toolbar">
+  <span id="app-title">🗂 Priority Board</span>
+  <div class="toolbar-divider"></div>
+  <div class="zoom-controls">
+    <button class="zoom-btn" id="btn-zoom-out">−</button>
+    <span id="zoom-label">100%</span>
+    <button class="zoom-btn" id="btn-zoom-in">+</button>
+  </div>
+  <div class="toolbar-divider"></div>
+  <button class="tb-btn" id="btn-ai-rec">🤖 AI recommendations</button>
+  <button class="tb-btn" id="btn-find-dup">🔍 Find duplicates</button>
+  <button class="tb-btn" id="btn-reprioritize">✦ Re-prioritize</button>
+  <div class="toolbar-spacer"></div>
+  <button id="btn-add-task">+ Add task</button>
+</div>
+
+<!-- ── FILTER BAR ── -->
+<div id="filter-bar">
+  <label>Filter:</label>
+  <button class="filter-pill active" data-cat="all">All</button>
+  <button class="filter-pill" data-cat="sales">Sales</button>
+  <button class="filter-pill" data-cat="marketing">Marketing</button>
+  <button class="filter-pill" data-cat="bizdev">Biz Dev</button>
+  <button class="filter-pill" data-cat="editing">Editing</button>
+  <button class="filter-pill" data-cat="health">Health</button>
+  <button class="filter-pill" data-cat="personal">Personal</button>
+  <button class="filter-pill" data-cat="reminder">Reminder</button>
+</div>
+
+<!-- ── SCROLL WRAP ── -->
+<div id="scroll-wrap">
+  <div id="board-outer">
+    <div id="board">
+      <div class="col" data-col="professional">
+        <input class="quick-add" placeholder="⚡ Quick add to Professional — press Enter" data-col="professional">
+        <div class="col-header">
+          <span class="col-title">💼 Professional</span>
+          <span class="col-count" id="count-professional">0</span>
+        </div>
+        <div class="card-list" id="list-professional"></div>
+      </div>
+      <div class="col" data-col="personal">
+        <input class="quick-add" placeholder="⚡ Quick add to Personal — press Enter" data-col="personal">
+        <div class="col-header">
+          <span class="col-title">🌿 Personal</span>
+          <span class="col-count" id="count-personal">0</span>
+        </div>
+        <div class="card-list" id="list-personal"></div>
+      </div>
+      <div class="col" data-col="reminders">
+        <input class="quick-add" placeholder="⚡ Quick add to Reminders — press Enter" data-col="reminders">
+        <div class="col-header">
+          <span class="col-title">🔔 Reminders</span>
+          <span class="col-count" id="count-reminders">0</span>
+        </div>
+        <div class="card-list" id="list-reminders"></div>
+      </div>
+    </div>
+
+    <!-- Archive -->
+    <div id="archive-section" style="display:none;">
+      <div id="archive-toggle">🗂 Archived tasks (<span id="archive-count">0</span>)</div>
+      <div id="archive-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD TASK MODAL ── -->
+<div class="modal-overlay hidden" id="add-modal">
+  <div class="modal-box">
+    <div class="modal-title">Add task</div>
+    <div class="field">
+      <label>Title</label>
+      <input type="text" id="new-title" placeholder="Task title…">
+    </div>
+    <div class="field">
+      <label>Column</label>
+      <select id="new-col">
+        <option value="professional">💼 Professional</option>
+        <option value="personal">🌿 Personal</option>
+        <option value="reminders">🔔 Reminders</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="new-cat">
+        <option value="sales">Sales</option>
+        <option value="marketing">Marketing</option>
+        <option value="bizdev">Biz Dev</option>
+        <option value="editing">Editing</option>
+        <option value="health">Health</option>
+        <option value="personal">Personal</option>
+        <option value="reminder">Reminder</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Emoji</label>
+      <input type="text" id="new-emoji" value="📌" maxlength="2" style="width:70px">
+    </div>
+    <div class="field">
+      <label>Notes (optional)</label>
+      <textarea id="new-notes" placeholder="Any additional details…"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
+      <button class="btn-primary" id="btn-modal-save">Save</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── CONFIRM MODAL ── -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title">Confirm</div>
+    <div id="confirm-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="btn-confirm-no">Cancel</button>
+      <button class="btn-primary" id="btn-confirm-yes" style="background:#dc2626;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI PANEL ── -->
+<div id="ai-panel">
+  <div id="ai-panel-header">
+    <span id="ai-panel-title">AI</span>
+    <button id="btn-close-ai">✕</button>
+  </div>
+  <div id="ai-panel-content"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   DATA & STORAGE
+══════════════════════════════════════════════════════ */
+const LS_TASKS   = 'zpb_tasks';
+const LS_ARCHIVE = 'zpb_archive';
+
+const SEED_TASKS = [
+  // Professional – Sales
+  {id:1,  title:"Explore recurring retainers for new and existing clients", emoji:"🔁", col:"professional", cat:"sales",     detail:"", priority:1},
+  {id:2,  title:"Call old clients — pitch new services",                    emoji:"📞", col:"professional", cat:"sales",     detail:"", priority:2},
+  {id:3,  title:"Build a free 15-minute video strategy call offer",         emoji:"📅", col:"professional", cat:"sales",     detail:"", priority:3},
+  {id:4,  title:"Cold call companies in the onboarding/training niche",     emoji:"🏭", col:"professional", cat:"sales",     detail:"", priority:4},
+  {id:5,  title:"Create a free offer for hesitant prospects",               emoji:"🎁", col:"professional", cat:"sales",     detail:"", priority:5},
+  {id:6,  title:"Sell the DIY client content product/service",              emoji:"📦", col:"professional", cat:"sales",     detail:"", priority:6},
+  // Professional – Marketing
+  {id:7,  title:"Create a one-page offer for onboarding/training videos",   emoji:"📄", col:"professional", cat:"marketing", detail:"", priority:7},
+  {id:8,  title:"Ask clients for reviews or testimonials",                  emoji:"⭐", col:"professional", cat:"marketing", detail:"", priority:8},
+  {id:9,  title:"Create new Facebook ads for Zenith",                       emoji:"📣", col:"professional", cat:"marketing", detail:"", priority:9},
+  {id:10, title:"Start an email newsletter",                                emoji:"📧", col:"professional", cat:"marketing", detail:"", priority:10},
+  {id:11, title:"Set up a client email list",                               emoji:"📋", col:"professional", cat:"marketing", detail:"", priority:11},
+  {id:12, title:"Write articles for trade publications with ROI metrics",   emoji:"✍️", col:"professional", cat:"marketing", detail:"", priority:12},
+  {id:13, title:"Create a cheap digital product / how-to sheet",            emoji:"📝", col:"professional", cat:"marketing", detail:"", priority:13},
+  {id:14, title:"Start a YouTube channel",                                  emoji:"▶️", col:"professional", cat:"marketing", detail:"", priority:14},
+  {id:15, title:"Create a TikTok channel about business/video tips",        emoji:"📱", col:"professional", cat:"marketing", detail:"", priority:15},
+  {id:16, title:"Start a separate short-form AI video channel",             emoji:"🎞️", col:"professional", cat:"marketing", detail:"", priority:16},
+  {id:17, title:"Try getting on podcasts for outreach",                     emoji:"🎙️", col:"professional", cat:"marketing", detail:"", priority:17},
+  // Professional – Biz Dev
+  {id:18, title:"Reach out to agencies for overflow/freelance work",        emoji:"🤝", col:"professional", cat:"bizdev",    detail:"", priority:18},
+  {id:19, title:"Improve your follow-up process with past clients",         emoji:"⚙️", col:"professional", cat:"bizdev",    detail:"", priority:19},
+  {id:20, title:"Invite old clients to lunch or an event",                  emoji:"🍽️", col:"professional", cat:"bizdev",    detail:"", priority:20},
+  {id:21, title:"Build a more automated lead-gen system",                   emoji:"🤖", col:"professional", cat:"bizdev",    detail:"", priority:21},
+  {id:22, title:"Build a list of target aerospace companies",               emoji:"✈️", col:"professional", cat:"bizdev",    detail:"", priority:22},
+  {id:23, title:"Start a mastermind with your creative freelancer network", emoji:"💡", col:"professional", cat:"bizdev",    detail:"", priority:23},
+  {id:24, title:"Create a client-facing roadmap/strategy product",          emoji:"🗺️", col:"professional", cat:"bizdev",    detail:"", priority:24},
+  {id:25, title:"Build an AI agent that writes daily blog posts",           emoji:"🧠", col:"professional", cat:"bizdev",    detail:"", priority:25},
+  {id:26, title:"Develop the 'Battle of the Podcasters' concept",          emoji:"🥊", col:"professional", cat:"bizdev",    detail:"", priority:26},
+  {id:27, title:"Consider hiring a commission-based salesperson",           emoji:"👤", col:"professional", cat:"bizdev",    detail:"", priority:27},
+  {id:28, title:"Hire and onboard a virtual assistant",                     emoji:"💻", col:"professional", cat:"bizdev",    detail:"", priority:28},
+  // Professional – Editing
+  {id:29, title:"Update the Zenith Creative demo reel and share socially",  emoji:"🎬", col:"professional", cat:"editing",   detail:"", priority:29},
+  {id:30, title:"Do spec recruiting video work for aerospace companies",     emoji:"🚀", col:"professional", cat:"editing",   detail:"", priority:30},
+  {id:31, title:"Send a new video concept to editor for a social post",     emoji:"🎥", col:"professional", cat:"editing",   detail:"", priority:31},
+  // Personal – Personal
+  {id:32, title:"Help wife find a new job",                                 emoji:"💛", col:"personal",     cat:"personal",  detail:"", priority:1},
+  {id:33, title:"Explore a house-sitting business for wife to run",         emoji:"🏡", col:"personal",     cat:"personal",  detail:"", priority:2},
+  {id:34, title:"Watch Shin Godzilla",                                      emoji:"🦖", col:"personal",     cat:"personal",  detail:"", priority:3},
+  {id:35, title:"Find a more comfortable office chair",                     emoji:"🪑", col:"personal",     cat:"personal",  detail:"", priority:4},
+  // Personal – Health
+  {id:36, title:"Take the boys fishing in Houston",                         emoji:"🎣", col:"personal",     cat:"health",    detail:"", priority:5},
+  // Personal – Editing
+  {id:37, title:"Make the pro bono music video with Mark Bebawi",           emoji:"🎵", col:"personal",     cat:"editing",   detail:"", priority:6},
+  // Reminders
+  {id:38, title:"Remember: time saved = financial ROI when pitching",       emoji:"⏱️", col:"reminders",    cat:"reminder",  detail:"", priority:1},
+  {id:39, title:"Remind Josh: need more chandelier footage",                emoji:"💡", col:"reminders",    cat:"reminder",  detail:"", priority:2},
+];
+
+const CAT_META = {
+  sales:     { label: 'Sales',     dot: '#D85A30' },
+  marketing: { label: 'Marketing', dot: '#378ADD' },
+  bizdev:    { label: 'Biz Dev',   dot: '#639922' },
+  editing:   { label: 'Editing',   dot: '#7F77DD' },
+  health:    { label: 'Health',    dot: '#1D9E75' },
+  personal:  { label: 'Personal',  dot: '#888780' },
+  reminder:  { label: 'Reminder',  dot: '#888780' },
+};
+
+const DEFAULT_CAT = { professional: 'bizdev', personal: 'personal', reminders: 'reminder' };
+
+let tasks   = [];
+let archive = [];
+let nextId  = 100;
+
+function loadData() {
+  const t = localStorage.getItem(LS_TASKS);
+  const a = localStorage.getItem(LS_ARCHIVE);
+  if (t) {
+    tasks = JSON.parse(t);
+    archive = a ? JSON.parse(a) : [];
+    nextId = (tasks.reduce((m, x) => Math.max(m, x.id), 0)) + 1;
+  } else {
+    tasks = SEED_TASKS.map(t => ({ ...t }));
+    nextId = 200;
+    save();
+  }
+}
+
+function save() {
+  localStorage.setItem(LS_TASKS, JSON.stringify(tasks));
+  localStorage.setItem(LS_ARCHIVE, JSON.stringify(archive));
+}
+
+function getCol(col) {
+  return tasks.filter(t => t.col === col).sort((a, b) => a.priority - b.priority);
+}
+
+function reindex(col) {
+  const colTasks = tasks.filter(t => t.col === col).sort((a, b) => a.priority - b.priority);
+  colTasks.forEach((t, i) => { t.priority = i + 1; });
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER
+══════════════════════════════════════════════════════ */
+let activeFilter = 'all';
+
+function render() {
+  ['professional', 'personal', 'reminders'].forEach(renderCol);
+  renderArchive();
+  updateCounts();
+}
+
+function renderCol(col) {
+  const list = document.getElementById('list-' + col);
+  const colTasks = getCol(col);
+  list.innerHTML = '';
+  colTasks.forEach(task => {
+    const el = buildCard(task);
+    if (activeFilter !== 'all' && task.cat !== activeFilter) {
+      el.style.display = 'none';
+    }
+    list.appendChild(el);
+  });
+}
+
+function updateCounts() {
+  ['professional', 'personal', 'reminders'].forEach(col => {
+    const count = tasks.filter(t => t.col === col).length;
+    document.getElementById('count-' + col).textContent = count;
+  });
+}
+
+function buildCard(task) {
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.dataset.id  = task.id;
+  div.dataset.cat = task.cat;
+  div.draggable   = true;
+
+  const catLabel = CAT_META[task.cat]?.label || task.cat;
+
+  div.innerHTML = `
+    <div class="card-top">
+      <span class="card-emoji">${task.emoji}</span>
+      <div class="card-title" contenteditable="true" spellcheck="false">${escHtml(task.title)}</div>
+      <button class="btn-done" title="Mark done">✓</button>
+    </div>
+    <div class="card-notes-wrap">
+      <div class="card-notes" contenteditable="true" spellcheck="false">${escHtml(task.detail || '')}</div>
+    </div>
+    <div class="card-footer">
+      <span class="card-priority">${task.priority}.</span>
+      <button class="btn-cat">${catLabel}</button>
+      <button class="btn-chevron">▾</button>
+      <button class="btn-trash">🗑</button>
+    </div>`;
+
+  // Title edit
+  const titleEl = div.querySelector('.card-title');
+  titleEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
+  });
+  titleEl.addEventListener('blur', () => {
+    task.title = titleEl.innerText.trim() || task.title;
+    save();
+  });
+  titleEl.addEventListener('mousedown', e => e.stopPropagation());
+
+  // Notes edit
+  const notesEl = div.querySelector('.card-notes');
+  notesEl.addEventListener('blur', () => {
+    task.detail = notesEl.innerText.trim();
+    save();
+  });
+  notesEl.addEventListener('mousedown', e => e.stopPropagation());
+
+  // Done button
+  div.querySelector('.btn-done').addEventListener('click', e => {
+    e.stopPropagation();
+    markDone(task.id, div);
+  });
+
+  // Chevron
+  const chevron = div.querySelector('.btn-chevron');
+  const notesWrap = div.querySelector('.card-notes-wrap');
+  chevron.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = notesWrap.classList.toggle('open');
+    chevron.classList.toggle('open', open);
+  });
+
+  // Trash
+  div.querySelector('.btn-trash').addEventListener('click', e => {
+    e.stopPropagation();
+    confirmDelete(task.id);
+  });
+
+  // Category popup
+  div.querySelector('.btn-cat').addEventListener('click', e => {
+    e.stopPropagation();
+    openCatPopup(task, div, div.querySelector('.btn-cat'));
+  });
+
+  // Drag
+  div.addEventListener('dragstart', onDragStart);
+  div.addEventListener('dragend',   onDragEnd);
+  div.addEventListener('dragover',  onCardDragOver);
+  div.addEventListener('drop',      onCardDrop);
+
+  return div;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   DONE / ARCHIVE
+══════════════════════════════════════════════════════ */
+function markDone(id, cardEl) {
+  cardEl.classList.add('done-anim');
+  cardEl.addEventListener('animationend', () => {
+    const idx = tasks.findIndex(t => t.id === id);
+    if (idx === -1) return;
+    const [task] = tasks.splice(idx, 1);
+    reindex(task.col);
+    task.archivedAt = new Date().toLocaleDateString();
+    archive.unshift(task);
+    save();
+    render();
+    renderArchive();
+  }, { once: true });
+}
+
+function renderArchive() {
+  const section = document.getElementById('archive-section');
+  const grid    = document.getElementById('archive-grid');
+  const countEl = document.getElementById('archive-count');
+
+  if (archive.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  countEl.textContent = archive.length;
+  grid.innerHTML = '';
+
+  archive.forEach(task => {
+    const card = document.createElement('div');
+    card.className = 'archive-card';
+    card.innerHTML = `
+      <span class="archive-emoji">${task.emoji}</span>
+      <div class="archive-info">
+        <div class="archive-title">${escHtml(task.title)}</div>
+        <div class="archive-date">Archived ${task.archivedAt}</div>
+      </div>
+      <button class="btn-restore" data-id="${task.id}">Restore</button>`;
+    card.querySelector('.btn-restore').addEventListener('click', () => restoreTask(task.id));
+    grid.appendChild(card);
+  });
+}
+
+function restoreTask(id) {
+  const idx = archive.findIndex(t => t.id === id);
+  if (idx === -1) return;
+  const [task] = archive.splice(idx, 1);
+  delete task.archivedAt;
+  const colTasks = tasks.filter(t => t.col === task.col);
+  task.priority = colTasks.length + 1;
+  tasks.push(task);
+  save();
+  render();
+  renderArchive();
+}
+
+/* ═══════════════════════════════════════════════════════
+   CATEGORY POPUP
+══════════════════════════════════════════════════════ */
+let activeCatPopup = null;
+
+function closeCatPopup() {
+  if (activeCatPopup) { activeCatPopup.remove(); activeCatPopup = null; }
+}
+
+function openCatPopup(task, cardEl, btnEl) {
+  closeCatPopup();
+  const popup = document.createElement('div');
+  popup.className = 'cat-popup';
+
+  Object.entries(CAT_META).forEach(([key, meta]) => {
+    const item = document.createElement('div');
+    item.className = 'cat-popup-item';
+    item.innerHTML = `<span class="cat-dot" style="background:${meta.dot}"></span>${meta.label}`;
+    if (key === task.cat) item.style.fontWeight = '600';
+    item.addEventListener('click', e => {
+      e.stopPropagation();
+      task.cat = key;
+      save();
+      closeCatPopup();
+      renderCol(task.col);
+    });
+    popup.appendChild(item);
+  });
+
+  cardEl.style.position = 'relative';
+  cardEl.appendChild(popup);
+  activeCatPopup = popup;
+}
+
+document.addEventListener('click', closeCatPopup);
+
+/* ═══════════════════════════════════════════════════════
+   DELETE CONFIRM
+══════════════════════════════════════════════════════ */
+let pendingDeleteId = null;
+
+function confirmDelete(id) {
+  const task = tasks.find(t => t.id === id);
+  if (!task) return;
+  document.getElementById('confirm-msg').textContent = `Delete "${task.title}"? This cannot be undone.`;
+  pendingDeleteId = id;
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+document.getElementById('btn-confirm-no').addEventListener('click', () => {
+  document.getElementById('confirm-modal').classList.add('hidden');
+  pendingDeleteId = null;
+});
+
+document.getElementById('btn-confirm-yes').addEventListener('click', () => {
+  if (pendingDeleteId !== null) {
+    const idx = tasks.findIndex(t => t.id === pendingDeleteId);
+    if (idx !== -1) {
+      const col = tasks[idx].col;
+      tasks.splice(idx, 1);
+      reindex(col);
+      save();
+      render();
+    }
+    pendingDeleteId = null;
+  }
+  document.getElementById('confirm-modal').classList.add('hidden');
+});
+
+/* ═══════════════════════════════════════════════════════
+   DRAG AND DROP
+══════════════════════════════════════════════════════ */
+let dragId = null;
+
+function onDragStart(e) {
+  dragId = parseInt(this.dataset.id);
+  this.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', dragId);
+}
+
+function onDragEnd() {
+  this.classList.remove('dragging');
+  document.querySelectorAll('.card.drag-target').forEach(c => c.classList.remove('drag-target'));
+  document.querySelectorAll('.card-list.drag-over').forEach(l => l.classList.remove('drag-over'));
+  dragId = null;
+}
+
+function onCardDragOver(e) {
+  if (dragId === null) return;
+  e.preventDefault(); e.stopPropagation();
+  document.querySelectorAll('.card.drag-target').forEach(c => c.classList.remove('drag-target'));
+  this.classList.add('drag-target');
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function onCardDrop(e) {
+  e.preventDefault(); e.stopPropagation();
+  if (dragId === null) return;
+  const targetId = parseInt(this.dataset.id);
+  if (dragId === targetId) return;
+
+  const src = tasks.find(t => t.id === dragId);
+  const tgt = tasks.find(t => t.id === targetId);
+  if (!src || !tgt) return;
+
+  const srcCol = src.col;
+  const tgtCol = tgt.col;
+
+  // Remove from source col
+  const srcArr = tasks.filter(t => t.col === srcCol).sort((a,b) => a.priority - b.priority);
+  const srcIdx = srcArr.findIndex(t => t.id === dragId);
+  srcArr.splice(srcIdx, 1);
+
+  // Insert before target in dest col
+  if (srcCol === tgtCol) {
+    const tgtIdx = srcArr.findIndex(t => t.id === targetId);
+    srcArr.splice(tgtIdx, 0, src);
+    srcArr.forEach((t, i) => { t.priority = i + 1; t.col = tgtCol; });
+  } else {
+    src.col = tgtCol;
+    const dstArr = tasks.filter(t => t.col === tgtCol && t.id !== dragId).sort((a,b) => a.priority - b.priority);
+    const tgtIdx = dstArr.findIndex(t => t.id === targetId);
+    dstArr.splice(tgtIdx, 0, src);
+    dstArr.forEach((t, i) => { t.priority = i + 1; t.col = tgtCol; });
+    srcArr.forEach((t, i) => { t.priority = i + 1; });
+  }
+
+  save();
+  render();
+}
+
+// Column list drag-over (empty space)
+document.querySelectorAll('.card-list').forEach(list => {
+  list.addEventListener('dragover', e => {
+    if (dragId === null) return;
+    e.preventDefault();
+    document.querySelectorAll('.card.drag-target').forEach(c => c.classList.remove('drag-target'));
+    list.classList.add('drag-over');
+    e.dataTransfer.dropEffect = 'move';
+  });
+  list.addEventListener('dragleave', e => {
+    if (!list.contains(e.relatedTarget)) list.classList.remove('drag-over');
+  });
+  list.addEventListener('drop', e => {
+    list.classList.remove('drag-over');
+    if (dragId === null) return;
+    e.preventDefault();
+    // Only handle if not dropped on a card (card handles it)
+    if (e.target.closest('.card')) return;
+    const col = list.id.replace('list-', '');
+    const src = tasks.find(t => t.id === dragId);
+    if (!src) return;
+    const srcCol = src.col;
+    // Remove from source
+    const srcArr = tasks.filter(t => t.col === srcCol).sort((a,b) => a.priority - b.priority);
+    srcArr.splice(srcArr.findIndex(t => t.id === dragId), 1);
+    srcArr.forEach((t, i) => { t.priority = i + 1; });
+    // Append to dest
+    src.col = col;
+    const dstArr = tasks.filter(t => t.col === col && t.id !== dragId).sort((a,b) => a.priority - b.priority);
+    src.priority = dstArr.length + 1;
+    save();
+    render();
+  });
+});
+
+/* ═══════════════════════════════════════════════════════
+   QUICK ADD
+══════════════════════════════════════════════════════ */
+document.querySelectorAll('.quick-add').forEach(input => {
+  input.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const title = input.value.trim();
+    if (!title) return;
+    const col = input.dataset.col;
+    const colTasks = tasks.filter(t => t.col === col);
+    const task = {
+      id: nextId++,
+      title,
+      emoji: '📌',
+      col,
+      cat: DEFAULT_CAT[col],
+      detail: '',
+      priority: colTasks.length + 1
+    };
+    tasks.push(task);
+    save();
+    render();
+    input.value = '';
+  });
+});
+
+/* ═══════════════════════════════════════════════════════
+   ADD TASK MODAL
+══════════════════════════════════════════════════════ */
+document.getElementById('btn-add-task').addEventListener('click', () => {
+  document.getElementById('new-title').value  = '';
+  document.getElementById('new-notes').value  = '';
+  document.getElementById('new-emoji').value  = '📌';
+  document.getElementById('new-col').value    = 'professional';
+  document.getElementById('new-cat').value    = 'bizdev';
+  document.getElementById('add-modal').classList.remove('hidden');
+  document.getElementById('new-title').focus();
+});
+
+document.getElementById('btn-modal-cancel').addEventListener('click', () => {
+  document.getElementById('add-modal').classList.add('hidden');
+});
+
+document.getElementById('add-modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('add-modal'))
+    document.getElementById('add-modal').classList.add('hidden');
+});
+
+document.getElementById('btn-modal-save').addEventListener('click', () => {
+  const title = document.getElementById('new-title').value.trim();
+  if (!title) { document.getElementById('new-title').focus(); return; }
+  const col   = document.getElementById('new-col').value;
+  const cat   = document.getElementById('new-cat').value;
+  const emoji = document.getElementById('new-emoji').value.trim() || '📌';
+  const notes = document.getElementById('new-notes').value.trim();
+  const colTasks = tasks.filter(t => t.col === col);
+  tasks.push({ id: nextId++, title, emoji, col, cat, detail: notes, priority: colTasks.length + 1 });
+  save();
+  render();
+  document.getElementById('add-modal').classList.add('hidden');
+});
+
+/* ═══════════════════════════════════════════════════════
+   ZOOM
+══════════════════════════════════════════════════════ */
+let zoom = 1.0;
+const board = document.getElementById('board');
+
+function setZoom(z) {
+  zoom = Math.min(1.5, Math.max(0.5, +z.toFixed(2)));
+  board.style.transform = `scale(${zoom})`;
+  document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
+}
+
+document.getElementById('btn-zoom-in').addEventListener('click',  () => setZoom(zoom + 0.1));
+document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(zoom - 0.1));
+
+document.getElementById('scroll-wrap').addEventListener('wheel', e => {
+  if (!e.ctrlKey && !e.metaKey) return;
+  e.preventDefault();
+  setZoom(zoom + (e.deltaY < 0 ? 0.05 : -0.05));
+}, { passive: false });
+
+/* ═══════════════════════════════════════════════════════
+   FILTER
+══════════════════════════════════════════════════════ */
+document.querySelectorAll('.filter-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    activeFilter = pill.dataset.cat;
+    document.querySelectorAll('.card').forEach(card => {
+      if (activeFilter === 'all') {
+        card.style.display = '';
+      } else {
+        card.style.display = card.dataset.cat === activeFilter ? '' : 'none';
+      }
+    });
+  });
+});
+
+/* ═══════════════════════════════════════════════════════
+   ARCHIVE TOGGLE
+══════════════════════════════════════════════════════ */
+document.getElementById('archive-toggle').addEventListener('click', function() {
+  this.classList.toggle('open');
+  document.getElementById('archive-grid').classList.toggle('open');
+});
+
+
+/* ═══════════════════════════════════════════════════════
+   AI PANEL
+══════════════════════════════════════════════════════ */
+const AI_SYSTEM = `You are a productivity assistant helping a video production business owner named Evans prioritize his tasks. His goals: Professionally — maximize profitability with minimal time, close retainer deals with new clients, grow his company Zenith Creative in the industrial sector. Personally — ensure the health and moral development of his two sons, keep his wife happy, build a retirement plan.`;
+
+function openAiPanel(title) {
+  document.getElementById('ai-panel-title').textContent = title;
+  document.getElementById('ai-panel-content').innerHTML = '<div class="ai-loading"><div class="spinner"></div> Thinking…</div>';
+  document.getElementById('ai-panel').classList.add('open');
+}
+
+function setAiContent(text) {
+  const el = document.getElementById('ai-panel-content');
+  el.textContent = text;
+}
+
+function setAiError(err) {
+  document.getElementById('ai-panel-content').innerHTML =
+    `<span style="color:#dc2626">⚠ ${escHtml(err)}</span>`;
+}
+
+document.getElementById('btn-close-ai').addEventListener('click', () => {
+  document.getElementById('ai-panel').classList.remove('open');
+});
+
+async function callClaude(prompt, userMsg) {
+  const res = await fetch('/.netlify/functions/claude', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1500,
+      system: prompt,
+      messages: [{ role: 'user', content: userMsg }]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `HTTP ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content?.[0]?.text || '';
+}
+
+/* ─── AI Recommendations ─── */
+document.getElementById('btn-ai-rec').addEventListener('click', async () => {
+  openAiPanel('🤖 AI Recommendations');
+  const taskList = tasks.map(t => `[${t.col}] ${t.emoji} ${t.title}`).join('\n');
+  try {
+    const text = await callClaude(
+      AI_SYSTEM,
+      `Here are all my current tasks:\n\n${taskList}\n\nIdentify which tasks could be meaningfully completed or significantly assisted by current AI tools available today. For each task, name the specific AI tool(s) and estimate the time savings per task. Be specific and practical.`
+    );
+    setAiContent(text);
+  } catch(e) { setAiError(e.message); }
+});
+
+/* ─── Find Duplicates ─── */
+document.getElementById('btn-find-dup').addEventListener('click', async () => {
+  openAiPanel('🔍 Find Duplicates');
+  const taskList = tasks.map(t => `[id:${t.id}] ${t.title}`).join('\n');
+  try {
+    const text = await callClaude(
+      AI_SYSTEM,
+      `Here is my full task list:\n\n${taskList}\n\nIdentify pairs or groups of tasks that represent the same objective and could be merged into one action. Explain why they overlap and suggest a merged version of each pair/group.`
+    );
+    setAiContent(text);
+  } catch(e) { setAiError(e.message); }
+});
+
+/* ─── Re-prioritize ─── */
+document.getElementById('btn-reprioritize').addEventListener('click', async () => {
+  openAiPanel('✦ Re-prioritize');
+  const byCol = {
+    professional: getCol('professional').map(t => `  ${t.priority}. ${t.emoji} ${t.title} [${t.cat}]`).join('\n'),
+    personal:     getCol('personal').map(t => `  ${t.priority}. ${t.emoji} ${t.title} [${t.cat}]`).join('\n'),
+    reminders:    getCol('reminders').map(t => `  ${t.priority}. ${t.emoji} ${t.title} [${t.cat}]`).join('\n'),
+  };
+  const taskList = `PROFESSIONAL:\n${byCol.professional}\n\nPERSONAL:\n${byCol.personal}\n\nREMINDERS:\n${byCol.reminders}`;
+  try {
+    const text = await callClaude(
+      AI_SYSTEM,
+      `Here are my current tasks organized by column:\n\n${taskList}\n\nBased on Evans's goals (maximize profitability, close retainers, grow in the industrial sector; family health and happiness; retirement plan), suggest a re-ordered priority list for each column. Number each task in your recommended order and explain the reasoning briefly. Do not remove any tasks. This is a recommendation only — Evans will decide whether to apply it.`
+    );
+    setAiContent(text);
+  } catch(e) { setAiError(e.message); }
+});
+
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════ */
+loadData();
+render();
+renderArchive();
+</script>
+</body>
+</html>
