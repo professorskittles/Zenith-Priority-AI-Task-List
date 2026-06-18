@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Zenith Priority Board</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -23,6 +24,40 @@ body {
   height: 100vh;
 }
 
+/* ── Login screen ── */
+#login-screen {
+  position: fixed; inset: 0; background: #1a1a18;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+}
+#login-screen.hidden { display: none; }
+#login-box {
+  background: #fff; border-radius: 14px; padding: 36px 40px;
+  width: 360px; box-shadow: 0 12px 48px rgba(0,0,0,0.4);
+}
+#login-logo { font-size: 22px; font-weight: 700; color: #1a1a18; margin-bottom: 6px; }
+#login-sub { font-size: 12px; color: #888; margin-bottom: 28px; }
+.login-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+.login-field label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.login-field input {
+  border: 1.5px solid #ddd; border-radius: 7px; padding: 9px 11px;
+  font-size: 13px; outline: none; font-family: inherit;
+  transition: border-color 0.15s;
+}
+.login-field input:focus { border-color: #2563eb; }
+#btn-login {
+  width: 100%; padding: 10px; border-radius: 7px; border: none;
+  background: #2563eb; color: #fff; font-size: 14px; font-weight: 500;
+  cursor: pointer; margin-top: 6px;
+}
+#btn-login:hover { background: #1d4ed8; }
+#login-error { color: #dc2626; font-size: 12px; margin-top: 10px; min-height: 18px; }
+#login-loading { color: #888; font-size: 12px; margin-top: 10px; display: none; }
+
+/* ── App shell (hidden until logged in) ── */
+#app { display: none; }
+#app.visible { display: block; }
+
 /* ── Toolbar ── */
 #toolbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
@@ -31,16 +66,8 @@ body {
   display: flex; align-items: center; gap: 8px; padding: 0 14px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.25);
 }
-
-#app-title {
-  color: #e8e6de; font-size: 14px; font-weight: 600;
-  margin-right: 8px; white-space: nowrap;
-}
-
-.toolbar-divider {
-  width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 4px;
-}
-
+#app-title { color: #e8e6de; font-size: 14px; font-weight: 600; margin-right: 8px; white-space: nowrap; }
+.toolbar-divider { width: 1px; height: 20px; background: rgba(255,255,255,0.12); margin: 0 4px; }
 .zoom-controls { display: flex; align-items: center; gap: 4px; }
 .zoom-btn {
   background: rgba(255,255,255,0.1); border: none; color: #ccc;
@@ -49,28 +76,25 @@ body {
 }
 .zoom-btn:hover { background: rgba(255,255,255,0.18); }
 #zoom-label { color: #aaa; font-size: 12px; min-width: 38px; text-align: center; }
-
 .toolbar-spacer { flex: 1; }
-
 .tb-btn {
   background: rgba(255,255,255,0.09); border: 1px solid rgba(255,255,255,0.13);
   color: #d8d6ce; padding: 5px 11px; border-radius: 6px; cursor: pointer;
   font-size: 12px; white-space: nowrap; transition: background 0.15s;
 }
 .tb-btn:hover { background: rgba(255,255,255,0.16); }
-
 #btn-add-task {
   background: #2563eb; border: none; color: #fff;
   padding: 6px 14px; border-radius: 6px; cursor: pointer;
   font-size: 13px; font-weight: 500; white-space: nowrap;
 }
 #btn-add-task:hover { background: #1d4ed8; }
-
-#btn-settings {
-  background: none; border: none; color: #888; cursor: pointer;
-  font-size: 16px; padding: 4px; border-radius: 4px;
+#btn-signout {
+  background: none; border: none; color: #666; cursor: pointer;
+  font-size: 11px; padding: 4px 8px; border-radius: 4px;
+  white-space: nowrap;
 }
-#btn-settings:hover { color: #ccc; }
+#btn-signout:hover { color: #ccc; }
 
 /* ── Filter bar ── */
 #filter-bar {
@@ -79,9 +103,7 @@ body {
   background: #e8e6de; border-bottom: 1px solid #d5d3cb;
   display: flex; align-items: center; gap: 6px; padding: 0 14px;
 }
-
 #filter-bar label { color: #666; font-size: 11px; font-weight: 500; margin-right: 4px; }
-
 .filter-pill {
   padding: 3px 11px; border-radius: 99px; border: 2px solid transparent;
   cursor: pointer; font-size: 11px; font-weight: 500; transition: border-color 0.12s;
@@ -100,14 +122,12 @@ body {
 #scroll-wrap {
   position: fixed;
   top: calc(var(--toolbar-h) + var(--filter-h));
-  left: 0; right: 0;
-  bottom: 0;
+  left: 0; right: 0; bottom: 0;
   overflow: auto;
 }
 
 /* ── Board ── */
 #board-outer { padding: 18px; min-width: 1230px; }
-
 #board {
   display: grid;
   grid-template-columns: repeat(3, minmax(400px, 1fr));
@@ -116,48 +136,22 @@ body {
 }
 
 /* ── Column ── */
-.col {
-  border-radius: 12px;
-  padding: 0 0 12px;
-  min-height: 200px;
-}
+.col { border-radius: 12px; padding: 0 0 12px; min-height: 200px; }
 .col[data-col="professional"] { background: var(--col-pro-bg); }
 .col[data-col="personal"]     { background: var(--col-per-bg); }
 .col[data-col="reminders"]    { background: var(--col-rem-bg); }
-
-.col-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 14px 8px;
-}
+.col-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
 .col-title { font-size: 13px; font-weight: 600; color: #2a2a28; }
-.col-count {
-  background: rgba(0,0,0,0.1); color: #555;
-  font-size: 10px; font-weight: 600; border-radius: 99px;
-  padding: 1px 7px;
-}
-
+.col-count { background: rgba(0,0,0,0.1); color: #555; font-size: 10px; font-weight: 600; border-radius: 99px; padding: 1px 7px; }
 .quick-add {
-  margin: 0 10px 10px;
-  padding: 8px 10px;
+  margin: 0 10px 10px; padding: 8px 10px;
   border: 1.5px dashed #bbb; border-radius: 8px;
-  background: transparent;
-  font-size: 12px; color: #888;
-  outline: none; width: calc(100% - 20px);
-  transition: border-color 0.15s;
+  background: transparent; font-size: 12px; color: #888;
+  outline: none; width: calc(100% - 20px); transition: border-color 0.15s;
 }
 .quick-add:focus { border-color: #2563eb; color: #333; }
-
-.card-list {
-  padding: 0 10px;
-  min-height: 40px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-
-.card-list.drag-over {
-  background: rgba(37, 99, 235, 0.06);
-  border-radius: 8px;
-  outline: 2px dashed rgba(37, 99, 235, 0.3);
-}
+.card-list { padding: 0 10px; min-height: 40px; display: flex; flex-direction: column; gap: 8px; }
+.card-list.drag-over { background: rgba(37,99,235,0.06); border-radius: 8px; outline: 2px dashed rgba(37,99,235,0.3); }
 
 /* ── Card ── */
 .card {
@@ -169,7 +163,6 @@ body {
 .card:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.18), 0 1px 4px rgba(0,0,0,0.1); }
 .card.dragging { opacity: 0.45; cursor: grabbing; transform: scale(0.97); }
 .card.drag-target { outline: 2px solid #2563eb; }
-
 .card[data-cat="sales"]     { background: #F5C4B3; color: #712B13; }
 .card[data-cat="marketing"] { background: #B5D4F4; color: #0C447C; }
 .card[data-cat="bizdev"]    { background: #C0DD97; color: #27500A; }
@@ -177,59 +170,38 @@ body {
 .card[data-cat="health"]    { background: #9FE1CB; color: #085041; }
 .card[data-cat="personal"]  { background: #E2E1DC; color: #3A3A38; }
 .card[data-cat="reminder"]  { background: #2C2C2A; color: #D3D1C7; }
-
-.card-top {
-  display: flex; align-items: flex-start; gap: 7px;
-  padding: 10px 10px 6px;
-}
+.card-top { display: flex; align-items: flex-start; gap: 7px; padding: 10px 10px 6px; }
 .card-emoji { font-size: 17px; flex-shrink: 0; line-height: 1.3; }
 .card-title {
   flex: 1; font-size: 13px; font-weight: 500; line-height: 1.45;
-  outline: none; word-break: break-word;
-  color: inherit;
+  outline: none; word-break: break-word; color: inherit;
 }
-.card-title[contenteditable="true"]:focus {
-  background: rgba(255,255,255,0.25); border-radius: 4px; padding: 1px 3px;
-}
-
+.card-title[contenteditable="true"]:focus { background: rgba(255,255,255,0.25); border-radius: 4px; padding: 1px 3px; }
 .btn-done {
   flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
   border: 1.5px solid currentColor; background: transparent;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
-  font-size: 11px; opacity: 0.55; color: inherit;
-  transition: opacity 0.15s, background 0.15s;
+  font-size: 11px; opacity: 0.55; color: inherit; transition: opacity 0.15s, background 0.15s;
 }
 .btn-done:hover { opacity: 1; background: rgba(255,255,255,0.25); }
-
-.card-notes-wrap {
-  display: none; padding: 0 10px 6px;
-}
+.card-notes-wrap { display: none; padding: 0 10px 6px; }
 .card-notes-wrap.open { display: block; }
 .card-notes {
   background: rgba(255,255,255,0.22); border-radius: 6px;
   padding: 6px 8px; font-size: 12px; line-height: 1.5;
-  min-height: 36px; outline: none; word-break: break-word;
-  color: inherit;
+  min-height: 36px; outline: none; word-break: break-word; color: inherit;
 }
 .card-notes:focus { background: rgba(255,255,255,0.32); }
 .card-notes:empty::before { content: 'Add notes…'; opacity: 0.45; }
-
-.card-footer {
-  display: flex; align-items: center; gap: 5px;
-  padding: 4px 10px 8px;
-}
+.card-footer { display: flex; align-items: center; gap: 5px; padding: 4px 10px 8px; }
 .card-priority { font-size: 10px; opacity: 0.5; min-width: 18px; color: inherit; }
-
 .btn-cat {
   font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
-  padding: 2px 7px; border-radius: 99px;
-  border: none; cursor: pointer; opacity: 0.75;
-  background: rgba(255,255,255,0.25); color: inherit;
-  transition: opacity 0.12s;
+  padding: 2px 7px; border-radius: 99px; border: none; cursor: pointer; opacity: 0.75;
+  background: rgba(255,255,255,0.25); color: inherit; transition: opacity 0.12s;
 }
 .btn-cat:hover { opacity: 1; }
 .card[data-cat="reminder"] .btn-cat { background: rgba(255,255,255,0.12); }
-
 .btn-chevron {
   background: none; border: none; cursor: pointer; padding: 2px 4px;
   font-size: 11px; opacity: 0.45; color: inherit; margin-left: auto;
@@ -237,12 +209,7 @@ body {
 }
 .btn-chevron:hover { opacity: 0.8; }
 .btn-chevron.open { transform: rotate(180deg); }
-
-.btn-trash {
-  background: none; border: none; cursor: pointer; padding: 2px 4px;
-  font-size: 12px; opacity: 0.35; color: inherit;
-  transition: opacity 0.12s;
-}
+.btn-trash { background: none; border: none; cursor: pointer; padding: 2px 4px; font-size: 12px; opacity: 0.35; color: inherit; transition: opacity 0.12s; }
 .btn-trash:hover { opacity: 0.75; }
 
 /* ── Category popup ── */
@@ -252,82 +219,40 @@ body {
   box-shadow: 0 4px 18px rgba(0,0,0,0.18); padding: 6px;
   z-index: 200; min-width: 150px;
 }
-.cat-popup-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px; border-radius: 5px; cursor: pointer;
-  font-size: 12px; color: #222;
-}
+.cat-popup-item { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 5px; cursor: pointer; font-size: 12px; color: #222; }
 .cat-popup-item:hover { background: #f0efe9; }
-.cat-dot {
-  width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
-}
+.cat-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
 
 /* ── Archive ── */
 #archive-section { margin: 0 0 30px; padding: 0 18px; }
-#archive-toggle {
-  font-size: 12px; color: #666; cursor: pointer; padding: 8px 0;
-  display: flex; align-items: center; gap: 6px;
-  user-select: none;
-}
+#archive-toggle { font-size: 12px; color: #666; cursor: pointer; padding: 8px 0; display: flex; align-items: center; gap: 6px; user-select: none; }
 #archive-toggle:hover { color: #333; }
 #archive-toggle::after { content: '▸'; transition: transform 0.18s; }
 #archive-toggle.open::after { transform: rotate(90deg); }
-
-#archive-grid {
-  display: none; grid-template-columns: repeat(3, minmax(400px, 1fr));
-  gap: 8px; margin-top: 8px;
-}
+#archive-grid { display: none; grid-template-columns: repeat(3, minmax(400px, 1fr)); gap: 8px; margin-top: 8px; }
 #archive-grid.open { display: grid; }
-
-.archive-card {
-  background: #ddd; border-radius: 10px; padding: 10px 12px;
-  display: flex; align-items: center; gap: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
+.archive-card { background: #ddd; border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 .archive-emoji { font-size: 16px; }
 .archive-info { flex: 1; }
 .archive-title { font-size: 12px; font-weight: 500; color: #333; }
 .archive-date { font-size: 10px; color: #888; margin-top: 2px; }
-.btn-restore {
-  font-size: 11px; padding: 3px 10px; border-radius: 5px;
-  border: 1px solid #bbb; background: #fff; cursor: pointer; color: #444;
-}
+.btn-restore { font-size: 11px; padding: 3px 10px; border-radius: 5px; border: 1px solid #bbb; background: #fff; cursor: pointer; color: #444; }
 .btn-restore:hover { background: #f0efe9; }
 
 /* ── Modals ── */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
-  z-index: 500; display: flex; align-items: center; justify-content: center;
-}
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 500; display: flex; align-items: center; justify-content: center; }
 .modal-overlay.hidden { display: none; }
-
-.modal-box {
-  background: #fff; border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.22);
-  padding: 24px 28px; width: 440px; max-width: 95vw;
-}
+.modal-box { background: #fff; border-radius: 12px; box-shadow: 0 8px 40px rgba(0,0,0,0.22); padding: 24px 28px; width: 440px; max-width: 95vw; }
 .modal-title { font-size: 16px; font-weight: 600; color: #1a1a18; margin-bottom: 18px; }
-
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
 .field label { font-size: 11px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
-.field input, .field textarea, .field select {
-  border: 1.5px solid #ddd; border-radius: 7px; padding: 8px 10px;
-  font-size: 13px; outline: none; font-family: inherit; color: #1a1a18;
-  transition: border-color 0.15s;
-}
+.field input, .field textarea, .field select { border: 1.5px solid #ddd; border-radius: 7px; padding: 8px 10px; font-size: 13px; outline: none; font-family: inherit; color: #1a1a18; transition: border-color 0.15s; }
 .field input:focus, .field textarea:focus, .field select:focus { border-color: #2563eb; }
 .field textarea { resize: vertical; min-height: 70px; }
-
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 6px; }
-.btn-cancel {
-  padding: 7px 16px; border-radius: 7px; border: 1.5px solid #ddd;
-  background: #fff; cursor: pointer; font-size: 13px; color: #444;
-}
+.btn-cancel { padding: 7px 16px; border-radius: 7px; border: 1.5px solid #ddd; background: #fff; cursor: pointer; font-size: 13px; color: #444; }
 .btn-cancel:hover { background: #f5f5f3; }
-.btn-primary {
-  padding: 7px 18px; border-radius: 7px; border: none;
-  background: #2563eb; color: #fff; cursor: pointer; font-size: 13px; font-weight: 500;
-}
+.btn-primary { padding: 7px 18px; border-radius: 7px; border: none; background: #2563eb; color: #fff; cursor: pointer; font-size: 13px; font-weight: 500; }
 .btn-primary:hover { background: #1d4ed8; }
 
 /* ── AI Panel ── */
@@ -338,36 +263,20 @@ body {
   z-index: 300; transition: right 0.25s ease; display: flex; flex-direction: column;
 }
 #ai-panel.open { right: 0; }
-#ai-panel-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 14px 16px; border-bottom: 1px solid #eee;
-  background: #fafaf8;
-}
+#ai-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #eee; background: #fafaf8; }
 #ai-panel-title { font-size: 14px; font-weight: 600; color: #1a1a18; }
-#btn-close-ai {
-  background: none; border: none; cursor: pointer; font-size: 18px; color: #888;
-  line-height: 1;
-}
+#btn-close-ai { background: none; border: none; cursor: pointer; font-size: 18px; color: #888; line-height: 1; }
 #btn-close-ai:hover { color: #333; }
-#ai-panel-content {
-  flex: 1; overflow-y: auto; padding: 16px;
-  font-size: 13px; line-height: 1.6; color: #333;
-  white-space: pre-wrap;
-}
-#ai-panel-content .ai-loading {
-  display: flex; align-items: center; gap: 8px; color: #888; padding: 20px 0;
-}
-.spinner {
-  width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: #2563eb;
-  border-radius: 50%; animation: spin 0.7s linear infinite;
-}
+#ai-panel-content { flex: 1; overflow-y: auto; padding: 16px; font-size: 13px; line-height: 1.6; color: #333; white-space: pre-wrap; }
+.ai-loading { display: flex; align-items: center; gap: 8px; color: #888; padding: 20px 0; }
+.spinner { width: 18px; height: 18px; border: 2px solid #ddd; border-top-color: #2563eb; border-radius: 50%; animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* API key modal extra style */
-#api-modal .modal-box { width: 400px; }
-.api-note { font-size: 11px; color: #888; margin-top: 4px; line-height: 1.5; }
+/* ── Confirm modal ── */
+#confirm-modal .modal-box { width: 340px; }
+#confirm-msg { font-size: 13px; color: #444; margin-bottom: 18px; }
 
-/* Done animation */
+/* ── Done animation ── */
 @keyframes doneOut {
   0%   { opacity: 1; transform: scale(1); }
   50%  { opacity: 0.6; transform: scale(1.04); }
@@ -375,203 +284,181 @@ body {
 }
 .card.done-anim { animation: doneOut 0.35s ease forwards; pointer-events: none; }
 
-/* Confirm mini modal */
-#confirm-modal .modal-box { width: 340px; }
-#confirm-msg { font-size: 13px; color: #444; margin-bottom: 18px; }
+/* ── Loading overlay ── */
+#board-loading {
+  position: fixed; inset: 0; background: #f0efe9;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 90; font-size: 14px; color: #888;
+}
+#board-loading.hidden { display: none; }
 </style>
 </head>
 <body>
 
-<!-- ── TOOLBAR ── -->
-<div id="toolbar">
-  <span id="app-title">🗂 Priority Board</span>
-  <div class="toolbar-divider"></div>
-  <div class="zoom-controls">
-    <button class="zoom-btn" id="btn-zoom-out">−</button>
-    <span id="zoom-label">100%</span>
-    <button class="zoom-btn" id="btn-zoom-in">+</button>
+<!-- ── LOGIN SCREEN ── -->
+<div id="login-screen">
+  <div id="login-box">
+    <div id="login-logo">🗂 Priority Board</div>
+    <div id="login-sub">Zenith Creative — Personal workspace</div>
+    <div class="login-field">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@example.com" autocomplete="email">
+    </div>
+    <div class="login-field">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <button id="btn-login">Sign in</button>
+    <div id="login-error"></div>
+    <div id="login-loading">Signing in…</div>
   </div>
-  <div class="toolbar-divider"></div>
-  <button class="tb-btn" id="btn-ai-rec">🤖 AI recommendations</button>
-  <button class="tb-btn" id="btn-find-dup">🔍 Find duplicates</button>
-  <button class="tb-btn" id="btn-reprioritize">✦ Re-prioritize</button>
-  <div class="toolbar-spacer"></div>
-  <button id="btn-add-task">+ Add task</button>
 </div>
 
-<!-- ── FILTER BAR ── -->
-<div id="filter-bar">
-  <label>Filter:</label>
-  <button class="filter-pill active" data-cat="all">All</button>
-  <button class="filter-pill" data-cat="sales">Sales</button>
-  <button class="filter-pill" data-cat="marketing">Marketing</button>
-  <button class="filter-pill" data-cat="bizdev">Biz Dev</button>
-  <button class="filter-pill" data-cat="editing">Editing</button>
-  <button class="filter-pill" data-cat="health">Health</button>
-  <button class="filter-pill" data-cat="personal">Personal</button>
-  <button class="filter-pill" data-cat="reminder">Reminder</button>
-</div>
+<!-- ── BOARD LOADING ── -->
+<div id="board-loading">Loading your board…</div>
 
-<!-- ── SCROLL WRAP ── -->
-<div id="scroll-wrap">
-  <div id="board-outer">
-    <div id="board">
-      <div class="col" data-col="professional">
-        <input class="quick-add" placeholder="⚡ Quick add to Professional — press Enter" data-col="professional">
-        <div class="col-header">
-          <span class="col-title">💼 Professional</span>
-          <span class="col-count" id="count-professional">0</span>
+<!-- ── APP SHELL ── -->
+<div id="app">
+
+  <!-- Toolbar -->
+  <div id="toolbar">
+    <span id="app-title">🗂 Priority Board</span>
+    <div class="toolbar-divider"></div>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="btn-zoom-out">−</button>
+      <span id="zoom-label">100%</span>
+      <button class="zoom-btn" id="btn-zoom-in">+</button>
+    </div>
+    <div class="toolbar-divider"></div>
+    <button class="tb-btn" id="btn-ai-rec">🤖 AI recommendations</button>
+    <button class="tb-btn" id="btn-find-dup">🔍 Find duplicates</button>
+    <button class="tb-btn" id="btn-reprioritize">✦ Re-prioritize</button>
+    <div class="toolbar-spacer"></div>
+    <button id="btn-add-task">+ Add task</button>
+    <button id="btn-signout">Sign out</button>
+  </div>
+
+  <!-- Filter bar -->
+  <div id="filter-bar">
+    <label>Filter:</label>
+    <button class="filter-pill active" data-cat="all">All</button>
+    <button class="filter-pill" data-cat="sales">Sales</button>
+    <button class="filter-pill" data-cat="marketing">Marketing</button>
+    <button class="filter-pill" data-cat="bizdev">Biz Dev</button>
+    <button class="filter-pill" data-cat="editing">Editing</button>
+    <button class="filter-pill" data-cat="health">Health</button>
+    <button class="filter-pill" data-cat="personal">Personal</button>
+    <button class="filter-pill" data-cat="reminder">Reminder</button>
+  </div>
+
+  <!-- Scroll wrap -->
+  <div id="scroll-wrap">
+    <div id="board-outer">
+      <div id="board">
+        <div class="col" data-col="professional">
+          <input class="quick-add" placeholder="⚡ Quick add to Professional — press Enter" data-col="professional">
+          <div class="col-header">
+            <span class="col-title">💼 Professional</span>
+            <span class="col-count" id="count-professional">0</span>
+          </div>
+          <div class="card-list" id="list-professional"></div>
         </div>
-        <div class="card-list" id="list-professional"></div>
-      </div>
-      <div class="col" data-col="personal">
-        <input class="quick-add" placeholder="⚡ Quick add to Personal — press Enter" data-col="personal">
-        <div class="col-header">
-          <span class="col-title">🌿 Personal</span>
-          <span class="col-count" id="count-personal">0</span>
+        <div class="col" data-col="personal">
+          <input class="quick-add" placeholder="⚡ Quick add to Personal — press Enter" data-col="personal">
+          <div class="col-header">
+            <span class="col-title">🌿 Personal</span>
+            <span class="col-count" id="count-personal">0</span>
+          </div>
+          <div class="card-list" id="list-personal"></div>
         </div>
-        <div class="card-list" id="list-personal"></div>
-      </div>
-      <div class="col" data-col="reminders">
-        <input class="quick-add" placeholder="⚡ Quick add to Reminders — press Enter" data-col="reminders">
-        <div class="col-header">
-          <span class="col-title">🔔 Reminders</span>
-          <span class="col-count" id="count-reminders">0</span>
+        <div class="col" data-col="reminders">
+          <input class="quick-add" placeholder="⚡ Quick add to Reminders — press Enter" data-col="reminders">
+          <div class="col-header">
+            <span class="col-title">🔔 Reminders</span>
+            <span class="col-count" id="count-reminders">0</span>
+          </div>
+          <div class="card-list" id="list-reminders"></div>
         </div>
-        <div class="card-list" id="list-reminders"></div>
+      </div>
+
+      <!-- Archive -->
+      <div id="archive-section" style="display:none;">
+        <div id="archive-toggle">🗂 Archived tasks (<span id="archive-count">0</span>)</div>
+        <div id="archive-grid"></div>
       </div>
     </div>
+  </div>
 
-    <!-- Archive -->
-    <div id="archive-section" style="display:none;">
-      <div id="archive-toggle">🗂 Archived tasks (<span id="archive-count">0</span>)</div>
-      <div id="archive-grid"></div>
+  <!-- Add task modal -->
+  <div class="modal-overlay hidden" id="add-modal">
+    <div class="modal-box">
+      <div class="modal-title">Add task</div>
+      <div class="field"><label>Title</label><input type="text" id="new-title" placeholder="Task title…"></div>
+      <div class="field">
+        <label>Column</label>
+        <select id="new-col">
+          <option value="professional">💼 Professional</option>
+          <option value="personal">🌿 Personal</option>
+          <option value="reminders">🔔 Reminders</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Category</label>
+        <select id="new-cat">
+          <option value="sales">Sales</option>
+          <option value="marketing">Marketing</option>
+          <option value="bizdev">Biz Dev</option>
+          <option value="editing">Editing</option>
+          <option value="health">Health</option>
+          <option value="personal">Personal</option>
+          <option value="reminder">Reminder</option>
+        </select>
+      </div>
+      <div class="field"><label>Emoji</label><input type="text" id="new-emoji" value="📌" maxlength="2" style="width:70px"></div>
+      <div class="field"><label>Notes (optional)</label><textarea id="new-notes" placeholder="Any additional details…"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
+        <button class="btn-primary" id="btn-modal-save">Save</button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- ── ADD TASK MODAL ── -->
-<div class="modal-overlay hidden" id="add-modal">
-  <div class="modal-box">
-    <div class="modal-title">Add task</div>
-    <div class="field">
-      <label>Title</label>
-      <input type="text" id="new-title" placeholder="Task title…">
-    </div>
-    <div class="field">
-      <label>Column</label>
-      <select id="new-col">
-        <option value="professional">💼 Professional</option>
-        <option value="personal">🌿 Personal</option>
-        <option value="reminders">🔔 Reminders</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Category</label>
-      <select id="new-cat">
-        <option value="sales">Sales</option>
-        <option value="marketing">Marketing</option>
-        <option value="bizdev">Biz Dev</option>
-        <option value="editing">Editing</option>
-        <option value="health">Health</option>
-        <option value="personal">Personal</option>
-        <option value="reminder">Reminder</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Emoji</label>
-      <input type="text" id="new-emoji" value="📌" maxlength="2" style="width:70px">
-    </div>
-    <div class="field">
-      <label>Notes (optional)</label>
-      <textarea id="new-notes" placeholder="Any additional details…"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="btn-modal-cancel">Cancel</button>
-      <button class="btn-primary" id="btn-modal-save">Save</button>
+  <!-- Confirm modal -->
+  <div class="modal-overlay hidden" id="confirm-modal">
+    <div class="modal-box">
+      <div class="modal-title">Confirm</div>
+      <div id="confirm-msg"></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="btn-confirm-no">Cancel</button>
+        <button class="btn-primary" id="btn-confirm-yes" style="background:#dc2626;">Delete</button>
+      </div>
     </div>
   </div>
-</div>
 
-
-<!-- ── CONFIRM MODAL ── -->
-<div class="modal-overlay hidden" id="confirm-modal">
-  <div class="modal-box">
-    <div class="modal-title">Confirm</div>
-    <div id="confirm-msg"></div>
-    <div class="modal-actions">
-      <button class="btn-cancel" id="btn-confirm-no">Cancel</button>
-      <button class="btn-primary" id="btn-confirm-yes" style="background:#dc2626;">Delete</button>
+  <!-- AI Panel -->
+  <div id="ai-panel">
+    <div id="ai-panel-header">
+      <span id="ai-panel-title">AI</span>
+      <button id="btn-close-ai">✕</button>
     </div>
+    <div id="ai-panel-content"></div>
   </div>
-</div>
 
-<!-- ── AI PANEL ── -->
-<div id="ai-panel">
-  <div id="ai-panel-header">
-    <span id="ai-panel-title">AI</span>
-    <button id="btn-close-ai">✕</button>
-  </div>
-  <div id="ai-panel-content"></div>
-</div>
+</div><!-- /#app -->
 
 <script>
 /* ═══════════════════════════════════════════════════════
-   DATA & STORAGE
+   SUPABASE INIT
 ══════════════════════════════════════════════════════ */
-const LS_TASKS   = 'zpb_tasks';
-const LS_ARCHIVE = 'zpb_archive';
+const SUPABASE_URL      = 'https://yokgoboitryxdrzrqhtf.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_ALOFGxvFA9iLAo3ohq66pQ_jMTwOqz1';
 
-const SEED_TASKS = [
-  // Professional – Sales
-  {id:1,  title:"Explore recurring retainers for new and existing clients", emoji:"🔁", col:"professional", cat:"sales",     detail:"", priority:1},
-  {id:2,  title:"Call old clients — pitch new services",                    emoji:"📞", col:"professional", cat:"sales",     detail:"", priority:2},
-  {id:3,  title:"Build a free 15-minute video strategy call offer",         emoji:"📅", col:"professional", cat:"sales",     detail:"", priority:3},
-  {id:4,  title:"Cold call companies in the onboarding/training niche",     emoji:"🏭", col:"professional", cat:"sales",     detail:"", priority:4},
-  {id:5,  title:"Create a free offer for hesitant prospects",               emoji:"🎁", col:"professional", cat:"sales",     detail:"", priority:5},
-  {id:6,  title:"Sell the DIY client content product/service",              emoji:"📦", col:"professional", cat:"sales",     detail:"", priority:6},
-  // Professional – Marketing
-  {id:7,  title:"Create a one-page offer for onboarding/training videos",   emoji:"📄", col:"professional", cat:"marketing", detail:"", priority:7},
-  {id:8,  title:"Ask clients for reviews or testimonials",                  emoji:"⭐", col:"professional", cat:"marketing", detail:"", priority:8},
-  {id:9,  title:"Create new Facebook ads for Zenith",                       emoji:"📣", col:"professional", cat:"marketing", detail:"", priority:9},
-  {id:10, title:"Start an email newsletter",                                emoji:"📧", col:"professional", cat:"marketing", detail:"", priority:10},
-  {id:11, title:"Set up a client email list",                               emoji:"📋", col:"professional", cat:"marketing", detail:"", priority:11},
-  {id:12, title:"Write articles for trade publications with ROI metrics",   emoji:"✍️", col:"professional", cat:"marketing", detail:"", priority:12},
-  {id:13, title:"Create a cheap digital product / how-to sheet",            emoji:"📝", col:"professional", cat:"marketing", detail:"", priority:13},
-  {id:14, title:"Start a YouTube channel",                                  emoji:"▶️", col:"professional", cat:"marketing", detail:"", priority:14},
-  {id:15, title:"Create a TikTok channel about business/video tips",        emoji:"📱", col:"professional", cat:"marketing", detail:"", priority:15},
-  {id:16, title:"Start a separate short-form AI video channel",             emoji:"🎞️", col:"professional", cat:"marketing", detail:"", priority:16},
-  {id:17, title:"Try getting on podcasts for outreach",                     emoji:"🎙️", col:"professional", cat:"marketing", detail:"", priority:17},
-  // Professional – Biz Dev
-  {id:18, title:"Reach out to agencies for overflow/freelance work",        emoji:"🤝", col:"professional", cat:"bizdev",    detail:"", priority:18},
-  {id:19, title:"Improve your follow-up process with past clients",         emoji:"⚙️", col:"professional", cat:"bizdev",    detail:"", priority:19},
-  {id:20, title:"Invite old clients to lunch or an event",                  emoji:"🍽️", col:"professional", cat:"bizdev",    detail:"", priority:20},
-  {id:21, title:"Build a more automated lead-gen system",                   emoji:"🤖", col:"professional", cat:"bizdev",    detail:"", priority:21},
-  {id:22, title:"Build a list of target aerospace companies",               emoji:"✈️", col:"professional", cat:"bizdev",    detail:"", priority:22},
-  {id:23, title:"Start a mastermind with your creative freelancer network", emoji:"💡", col:"professional", cat:"bizdev",    detail:"", priority:23},
-  {id:24, title:"Create a client-facing roadmap/strategy product",          emoji:"🗺️", col:"professional", cat:"bizdev",    detail:"", priority:24},
-  {id:25, title:"Build an AI agent that writes daily blog posts",           emoji:"🧠", col:"professional", cat:"bizdev",    detail:"", priority:25},
-  {id:26, title:"Develop the 'Battle of the Podcasters' concept",          emoji:"🥊", col:"professional", cat:"bizdev",    detail:"", priority:26},
-  {id:27, title:"Consider hiring a commission-based salesperson",           emoji:"👤", col:"professional", cat:"bizdev",    detail:"", priority:27},
-  {id:28, title:"Hire and onboard a virtual assistant",                     emoji:"💻", col:"professional", cat:"bizdev",    detail:"", priority:28},
-  // Professional – Editing
-  {id:29, title:"Update the Zenith Creative demo reel and share socially",  emoji:"🎬", col:"professional", cat:"editing",   detail:"", priority:29},
-  {id:30, title:"Do spec recruiting video work for aerospace companies",     emoji:"🚀", col:"professional", cat:"editing",   detail:"", priority:30},
-  {id:31, title:"Send a new video concept to editor for a social post",     emoji:"🎥", col:"professional", cat:"editing",   detail:"", priority:31},
-  // Personal – Personal
-  {id:32, title:"Help wife find a new job",                                 emoji:"💛", col:"personal",     cat:"personal",  detail:"", priority:1},
-  {id:33, title:"Explore a house-sitting business for wife to run",         emoji:"🏡", col:"personal",     cat:"personal",  detail:"", priority:2},
-  {id:34, title:"Watch Shin Godzilla",                                      emoji:"🦖", col:"personal",     cat:"personal",  detail:"", priority:3},
-  {id:35, title:"Find a more comfortable office chair",                     emoji:"🪑", col:"personal",     cat:"personal",  detail:"", priority:4},
-  // Personal – Health
-  {id:36, title:"Take the boys fishing in Houston",                         emoji:"🎣", col:"personal",     cat:"health",    detail:"", priority:5},
-  // Personal – Editing
-  {id:37, title:"Make the pro bono music video with Mark Bebawi",           emoji:"🎵", col:"personal",     cat:"editing",   detail:"", priority:6},
-  // Reminders
-  {id:38, title:"Remember: time saved = financial ROI when pitching",       emoji:"⏱️", col:"reminders",    cat:"reminder",  detail:"", priority:1},
-  {id:39, title:"Remind Josh: need more chandelier footage",                emoji:"💡", col:"reminders",    cat:"reminder",  detail:"", priority:2},
-];
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+/* ═══════════════════════════════════════════════════════
+   CONSTANTS & STATE
+══════════════════════════════════════════════════════ */
 const CAT_META = {
   sales:     { label: 'Sales',     dot: '#D85A30' },
   marketing: { label: 'Marketing', dot: '#378ADD' },
@@ -581,69 +468,205 @@ const CAT_META = {
   personal:  { label: 'Personal',  dot: '#888780' },
   reminder:  { label: 'Reminder',  dot: '#888780' },
 };
-
 const DEFAULT_CAT = { professional: 'bizdev', personal: 'personal', reminders: 'reminder' };
+
+const AI_SYSTEM = `You are a productivity assistant helping a video production business owner named Evans prioritize his tasks. His goals: Professionally — maximize profitability with minimal time, close retainer deals with new clients, grow his company Zenith Creative in the industrial sector. Personally — ensure the health and moral development of his two sons, keep his wife happy, build a retirement plan.`;
+
+const SEED_TASKS = [
+  {title:"Explore recurring retainers for new and existing clients",emoji:"🔁",col:"professional",cat:"sales",detail:"",priority:1},
+  {title:"Call old clients — pitch new services",emoji:"📞",col:"professional",cat:"sales",detail:"",priority:2},
+  {title:"Build a free 15-minute video strategy call offer",emoji:"📅",col:"professional",cat:"sales",detail:"",priority:3},
+  {title:"Cold call companies in the onboarding/training niche",emoji:"🏭",col:"professional",cat:"sales",detail:"",priority:4},
+  {title:"Create a free offer for hesitant prospects",emoji:"🎁",col:"professional",cat:"sales",detail:"",priority:5},
+  {title:"Sell the DIY client content product/service",emoji:"📦",col:"professional",cat:"sales",detail:"",priority:6},
+  {title:"Create a one-page offer for onboarding/training videos",emoji:"📄",col:"professional",cat:"marketing",detail:"",priority:7},
+  {title:"Ask clients for reviews or testimonials",emoji:"⭐",col:"professional",cat:"marketing",detail:"",priority:8},
+  {title:"Create new Facebook ads for Zenith",emoji:"📣",col:"professional",cat:"marketing",detail:"",priority:9},
+  {title:"Start an email newsletter",emoji:"📧",col:"professional",cat:"marketing",detail:"",priority:10},
+  {title:"Set up a client email list",emoji:"📋",col:"professional",cat:"marketing",detail:"",priority:11},
+  {title:"Write articles for trade publications with ROI metrics",emoji:"✍️",col:"professional",cat:"marketing",detail:"",priority:12},
+  {title:"Create a cheap digital product / how-to sheet",emoji:"📝",col:"professional",cat:"marketing",detail:"",priority:13},
+  {title:"Start a YouTube channel",emoji:"▶️",col:"professional",cat:"marketing",detail:"",priority:14},
+  {title:"Create a TikTok channel about business/video tips",emoji:"📱",col:"professional",cat:"marketing",detail:"",priority:15},
+  {title:"Start a separate short-form AI video channel",emoji:"🎞️",col:"professional",cat:"marketing",detail:"",priority:16},
+  {title:"Try getting on podcasts for outreach",emoji:"🎙️",col:"professional",cat:"marketing",detail:"",priority:17},
+  {title:"Reach out to agencies for overflow/freelance work",emoji:"🤝",col:"professional",cat:"bizdev",detail:"",priority:18},
+  {title:"Improve your follow-up process with past clients",emoji:"⚙️",col:"professional",cat:"bizdev",detail:"",priority:19},
+  {title:"Invite old clients to lunch or an event",emoji:"🍽️",col:"professional",cat:"bizdev",detail:"",priority:20},
+  {title:"Build a more automated lead-gen system",emoji:"🤖",col:"professional",cat:"bizdev",detail:"",priority:21},
+  {title:"Build a list of target aerospace companies",emoji:"✈️",col:"professional",cat:"bizdev",detail:"",priority:22},
+  {title:"Start a mastermind with your creative freelancer network",emoji:"💡",col:"professional",cat:"bizdev",detail:"",priority:23},
+  {title:"Create a client-facing roadmap/strategy product",emoji:"🗺️",col:"professional",cat:"bizdev",detail:"",priority:24},
+  {title:"Build an AI agent that writes daily blog posts",emoji:"🧠",col:"professional",cat:"bizdev",detail:"",priority:25},
+  {title:"Develop the 'Battle of the Podcasters' concept",emoji:"🥊",col:"professional",cat:"bizdev",detail:"",priority:26},
+  {title:"Consider hiring a commission-based salesperson",emoji:"👤",col:"professional",cat:"bizdev",detail:"",priority:27},
+  {title:"Hire and onboard a virtual assistant",emoji:"💻",col:"professional",cat:"bizdev",detail:"",priority:28},
+  {title:"Update the Zenith Creative demo reel and share socially",emoji:"🎬",col:"professional",cat:"editing",detail:"",priority:29},
+  {title:"Do spec recruiting video work for aerospace companies",emoji:"🚀",col:"professional",cat:"editing",detail:"",priority:30},
+  {title:"Send a new video concept to editor for a social post",emoji:"🎥",col:"professional",cat:"editing",detail:"",priority:31},
+  {title:"Help wife find a new job",emoji:"💛",col:"personal",cat:"personal",detail:"",priority:1},
+  {title:"Explore a house-sitting business for wife to run",emoji:"🏡",col:"personal",cat:"personal",detail:"",priority:2},
+  {title:"Watch Shin Godzilla",emoji:"🦖",col:"personal",cat:"personal",detail:"",priority:3},
+  {title:"Find a more comfortable office chair",emoji:"🪑",col:"personal",cat:"personal",detail:"",priority:4},
+  {title:"Take the boys fishing in Houston",emoji:"🎣",col:"personal",cat:"health",detail:"",priority:5},
+  {title:"Make the pro bono music video with Mark Bebawi",emoji:"🎵",col:"personal",cat:"editing",detail:"",priority:6},
+  {title:"Remember: time saved = financial ROI when pitching",emoji:"⏱️",col:"reminders",cat:"reminder",detail:"",priority:1},
+  {title:"Remind Josh: need more chandelier footage",emoji:"💡",col:"reminders",cat:"reminder",detail:"Can't finish the video without it. Send Josh a quick message. Note: this edit is billable — charge approximately $500 upon delivery.",priority:2},
+];
 
 let tasks   = [];
 let archive = [];
-let nextId  = 100;
+let currentUser = null;
+let activeFilter = 'all';
 
-function loadData() {
-  const t = localStorage.getItem(LS_TASKS);
-  const a = localStorage.getItem(LS_ARCHIVE);
-  if (t) {
-    tasks = JSON.parse(t);
-    archive = a ? JSON.parse(a) : [];
-    nextId = (tasks.reduce((m, x) => Math.max(m, x.id), 0)) + 1;
+/* ═══════════════════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════════════════ */
+async function initAuth() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    showApp();
   } else {
-    tasks = SEED_TASKS.map(t => ({ ...t }));
-    nextId = 200;
-    save();
+    showLogin();
   }
+
+  db.auth.onAuthStateChange((_event, session) => {
+    if (session) {
+      currentUser = session.user;
+      showApp();
+    } else {
+      currentUser = null;
+      showLogin();
+    }
+  });
 }
 
-function save() {
-  localStorage.setItem(LS_TASKS, JSON.stringify(tasks));
-  localStorage.setItem(LS_ARCHIVE, JSON.stringify(archive));
+function showLogin() {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('board-loading').classList.add('hidden');
 }
 
-function getCol(col) {
-  return tasks.filter(t => t.col === col).sort((a, b) => a.priority - b.priority);
+async function showApp() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('board-loading').classList.remove('hidden');
+  document.getElementById('app').classList.add('visible');
+  await loadData();
+  document.getElementById('board-loading').classList.add('hidden');
 }
 
-function reindex(col) {
-  const colTasks = tasks.filter(t => t.col === col).sort((a, b) => a.priority - b.priority);
-  colTasks.forEach((t, i) => { t.priority = i + 1; });
+document.getElementById('btn-login').addEventListener('click', async () => {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  const loadEl   = document.getElementById('login-loading');
+  errEl.textContent = '';
+  if (!email || !password) { errEl.textContent = 'Please enter your email and password.'; return; }
+  loadEl.style.display = 'block';
+  document.getElementById('btn-login').disabled = true;
+  const { error } = await db.auth.signInWithPassword({ email, password });
+  loadEl.style.display = 'none';
+  document.getElementById('btn-login').disabled = false;
+  if (error) errEl.textContent = error.message;
+});
+
+document.getElementById('login-email').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-password').focus(); });
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+
+document.getElementById('btn-signout').addEventListener('click', async () => {
+  await db.auth.signOut();
+  tasks = []; archive = [];
+  render(); renderArchive();
+});
+
+/* ═══════════════════════════════════════════════════════
+   DATA — SUPABASE
+══════════════════════════════════════════════════════ */
+async function loadData() {
+  const [{ data: t }, { data: a }] = await Promise.all([
+    db.from('tasks').select('*').order('priority', { ascending: true }),
+    db.from('archive').select('*').order('created_at', { ascending: false }),
+  ]);
+  tasks   = t || [];
+  archive = a || [];
+
+  if (tasks.length === 0) await seedData();
+  render();
+  renderArchive();
+}
+
+async function seedData() {
+  const rows = SEED_TASKS.map(t => ({ ...t, user_id: currentUser.id }));
+  const { data } = await db.from('tasks').insert(rows).select();
+  tasks = data || [];
+}
+
+async function dbInsertTask(task) {
+  const { data } = await db.from('tasks').insert({ ...task, user_id: currentUser.id }).select().single();
+  return data;
+}
+
+async function dbUpdateTask(id, fields) {
+  await db.from('tasks').update(fields).eq('id', id);
+}
+
+async function dbDeleteTask(id) {
+  await db.from('tasks').delete().eq('id', id);
+}
+
+async function dbUpdatePriorities(colTasks) {
+  await Promise.all(colTasks.map(t => db.from('tasks').update({ priority: t.priority }).eq('id', t.id)));
+}
+
+async function dbArchiveTask(task) {
+  await db.from('tasks').delete().eq('id', task.id);
+  const { data } = await db.from('archive').insert({
+    user_id: currentUser.id, title: task.title, emoji: task.emoji,
+    col: task.col, cat: task.cat, detail: task.detail,
+    priority: task.priority, archived_at: new Date().toLocaleDateString(),
+  }).select().single();
+  return data;
+}
+
+async function dbRestoreTask(archiveId) {
+  const item = archive.find(a => a.id === archiveId);
+  if (!item) return null;
+  await db.from('archive').delete().eq('id', archiveId);
+  const colCount = tasks.filter(t => t.col === item.col).length;
+  const { data } = await db.from('tasks').insert({
+    user_id: currentUser.id, title: item.title, emoji: item.emoji,
+    col: item.col, cat: item.cat, detail: item.detail,
+    priority: colCount + 1,
+  }).select().single();
+  return data;
 }
 
 /* ═══════════════════════════════════════════════════════
    RENDER
 ══════════════════════════════════════════════════════ */
-let activeFilter = 'all';
+function getCol(col) {
+  return tasks.filter(t => t.col === col).sort((a, b) => a.priority - b.priority);
+}
 
 function render() {
   ['professional', 'personal', 'reminders'].forEach(renderCol);
-  renderArchive();
   updateCounts();
 }
 
 function renderCol(col) {
   const list = document.getElementById('list-' + col);
-  const colTasks = getCol(col);
   list.innerHTML = '';
-  colTasks.forEach(task => {
+  getCol(col).forEach(task => {
     const el = buildCard(task);
-    if (activeFilter !== 'all' && task.cat !== activeFilter) {
-      el.style.display = 'none';
-    }
+    if (activeFilter !== 'all' && task.cat !== activeFilter) el.style.display = 'none';
     list.appendChild(el);
   });
 }
 
 function updateCounts() {
   ['professional', 'personal', 'reminders'].forEach(col => {
-    const count = tasks.filter(t => t.col === col).length;
-    document.getElementById('count-' + col).textContent = count;
+    document.getElementById('count-' + col).textContent = tasks.filter(t => t.col === col).length;
   });
 }
 
@@ -653,8 +676,6 @@ function buildCard(task) {
   div.dataset.id  = task.id;
   div.dataset.cat = task.cat;
   div.draggable   = true;
-
-  const catLabel = CAT_META[task.cat]?.label || task.cat;
 
   div.innerHTML = `
     <div class="card-top">
@@ -667,37 +688,28 @@ function buildCard(task) {
     </div>
     <div class="card-footer">
       <span class="card-priority">${task.priority}.</span>
-      <button class="btn-cat">${catLabel}</button>
+      <button class="btn-cat">${CAT_META[task.cat]?.label || task.cat}</button>
       <button class="btn-chevron">▾</button>
       <button class="btn-trash">🗑</button>
     </div>`;
 
-  // Title edit
   const titleEl = div.querySelector('.card-title');
-  titleEl.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); }
-  });
+  titleEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); titleEl.blur(); } });
   titleEl.addEventListener('blur', () => {
-    task.title = titleEl.innerText.trim() || task.title;
-    save();
+    const val = titleEl.innerText.trim();
+    if (val && val !== task.title) { task.title = val; dbUpdateTask(task.id, { title: val }); }
   });
   titleEl.addEventListener('mousedown', e => e.stopPropagation());
 
-  // Notes edit
   const notesEl = div.querySelector('.card-notes');
   notesEl.addEventListener('blur', () => {
-    task.detail = notesEl.innerText.trim();
-    save();
+    const val = notesEl.innerText.trim();
+    if (val !== (task.detail || '')) { task.detail = val; dbUpdateTask(task.id, { detail: val }); }
   });
   notesEl.addEventListener('mousedown', e => e.stopPropagation());
 
-  // Done button
-  div.querySelector('.btn-done').addEventListener('click', e => {
-    e.stopPropagation();
-    markDone(task.id, div);
-  });
+  div.querySelector('.btn-done').addEventListener('click', e => { e.stopPropagation(); markDone(task.id, div); });
 
-  // Chevron
   const chevron = div.querySelector('.btn-chevron');
   const notesWrap = div.querySelector('.card-notes-wrap');
   chevron.addEventListener('click', e => {
@@ -706,19 +718,9 @@ function buildCard(task) {
     chevron.classList.toggle('open', open);
   });
 
-  // Trash
-  div.querySelector('.btn-trash').addEventListener('click', e => {
-    e.stopPropagation();
-    confirmDelete(task.id);
-  });
+  div.querySelector('.btn-trash').addEventListener('click', e => { e.stopPropagation(); confirmDelete(task.id); });
+  div.querySelector('.btn-cat').addEventListener('click', e => { e.stopPropagation(); openCatPopup(task, div); });
 
-  // Category popup
-  div.querySelector('.btn-cat').addEventListener('click', e => {
-    e.stopPropagation();
-    openCatPopup(task, div, div.querySelector('.btn-cat'));
-  });
-
-  // Drag
   div.addEventListener('dragstart', onDragStart);
   div.addEventListener('dragend',   onDragEnd);
   div.addEventListener('dragover',  onCardDragOver);
@@ -736,53 +738,49 @@ function escHtml(s) {
 ══════════════════════════════════════════════════════ */
 function markDone(id, cardEl) {
   cardEl.classList.add('done-anim');
-  cardEl.addEventListener('animationend', () => {
+  cardEl.addEventListener('animationend', async () => {
     const idx = tasks.findIndex(t => t.id === id);
     if (idx === -1) return;
-    const [task] = tasks.splice(idx, 1);
-    reindex(task.col);
-    task.archivedAt = new Date().toLocaleDateString();
-    archive.unshift(task);
-    save();
+    const task = tasks[idx];
+    const archived = await dbArchiveTask(task);
+    tasks.splice(idx, 1);
+    reindexLocal(task.col);
+    if (archived) archive.unshift(archived);
     render();
     renderArchive();
   }, { once: true });
 }
 
+function reindexLocal(col) {
+  tasks.filter(t => t.col === col).sort((a,b) => a.priority - b.priority).forEach((t,i) => { t.priority = i+1; });
+}
+
 function renderArchive() {
   const section = document.getElementById('archive-section');
   const grid    = document.getElementById('archive-grid');
-  const countEl = document.getElementById('archive-count');
-
+  document.getElementById('archive-count').textContent = archive.length;
   if (archive.length === 0) { section.style.display = 'none'; return; }
   section.style.display = 'block';
-  countEl.textContent = archive.length;
   grid.innerHTML = '';
-
-  archive.forEach(task => {
+  archive.forEach(item => {
     const card = document.createElement('div');
     card.className = 'archive-card';
     card.innerHTML = `
-      <span class="archive-emoji">${task.emoji}</span>
+      <span class="archive-emoji">${item.emoji}</span>
       <div class="archive-info">
-        <div class="archive-title">${escHtml(task.title)}</div>
-        <div class="archive-date">Archived ${task.archivedAt}</div>
+        <div class="archive-title">${escHtml(item.title)}</div>
+        <div class="archive-date">Archived ${item.archived_at || ''}</div>
       </div>
-      <button class="btn-restore" data-id="${task.id}">Restore</button>`;
-    card.querySelector('.btn-restore').addEventListener('click', () => restoreTask(task.id));
+      <button class="btn-restore" data-id="${item.id}">Restore</button>`;
+    card.querySelector('.btn-restore').addEventListener('click', () => restoreTask(item.id));
     grid.appendChild(card);
   });
 }
 
-function restoreTask(id) {
-  const idx = archive.findIndex(t => t.id === id);
-  if (idx === -1) return;
-  const [task] = archive.splice(idx, 1);
-  delete task.archivedAt;
-  const colTasks = tasks.filter(t => t.col === task.col);
-  task.priority = colTasks.length + 1;
-  tasks.push(task);
-  save();
+async function restoreTask(archiveId) {
+  const restored = await dbRestoreTask(archiveId);
+  archive = archive.filter(a => a.id !== archiveId);
+  if (restored) tasks.push(restored);
   render();
   renderArchive();
 }
@@ -791,16 +789,12 @@ function restoreTask(id) {
    CATEGORY POPUP
 ══════════════════════════════════════════════════════ */
 let activeCatPopup = null;
+function closeCatPopup() { if (activeCatPopup) { activeCatPopup.remove(); activeCatPopup = null; } }
 
-function closeCatPopup() {
-  if (activeCatPopup) { activeCatPopup.remove(); activeCatPopup = null; }
-}
-
-function openCatPopup(task, cardEl, btnEl) {
+function openCatPopup(task, cardEl) {
   closeCatPopup();
   const popup = document.createElement('div');
   popup.className = 'cat-popup';
-
   Object.entries(CAT_META).forEach(([key, meta]) => {
     const item = document.createElement('div');
     item.className = 'cat-popup-item';
@@ -809,25 +803,22 @@ function openCatPopup(task, cardEl, btnEl) {
     item.addEventListener('click', e => {
       e.stopPropagation();
       task.cat = key;
-      save();
+      dbUpdateTask(task.id, { cat: key });
       closeCatPopup();
       renderCol(task.col);
     });
     popup.appendChild(item);
   });
-
   cardEl.style.position = 'relative';
   cardEl.appendChild(popup);
   activeCatPopup = popup;
 }
-
 document.addEventListener('click', closeCatPopup);
 
 /* ═══════════════════════════════════════════════════════
-   DELETE CONFIRM
+   DELETE
 ══════════════════════════════════════════════════════ */
 let pendingDeleteId = null;
-
 function confirmDelete(id) {
   const task = tasks.find(t => t.id === id);
   if (!task) return;
@@ -835,20 +826,19 @@ function confirmDelete(id) {
   pendingDeleteId = id;
   document.getElementById('confirm-modal').classList.remove('hidden');
 }
-
 document.getElementById('btn-confirm-no').addEventListener('click', () => {
   document.getElementById('confirm-modal').classList.add('hidden');
   pendingDeleteId = null;
 });
-
-document.getElementById('btn-confirm-yes').addEventListener('click', () => {
+document.getElementById('btn-confirm-yes').addEventListener('click', async () => {
   if (pendingDeleteId !== null) {
     const idx = tasks.findIndex(t => t.id === pendingDeleteId);
     if (idx !== -1) {
       const col = tasks[idx].col;
+      await dbDeleteTask(pendingDeleteId);
       tasks.splice(idx, 1);
-      reindex(col);
-      save();
+      reindexLocal(col);
+      await dbUpdatePriorities(tasks.filter(t => t.col === col));
       render();
     }
     pendingDeleteId = null;
@@ -865,25 +855,20 @@ function onDragStart(e) {
   dragId = parseInt(this.dataset.id);
   this.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', dragId);
 }
-
 function onDragEnd() {
   this.classList.remove('dragging');
   document.querySelectorAll('.card.drag-target').forEach(c => c.classList.remove('drag-target'));
   document.querySelectorAll('.card-list.drag-over').forEach(l => l.classList.remove('drag-over'));
   dragId = null;
 }
-
 function onCardDragOver(e) {
   if (dragId === null) return;
   e.preventDefault(); e.stopPropagation();
   document.querySelectorAll('.card.drag-target').forEach(c => c.classList.remove('drag-target'));
   this.classList.add('drag-target');
-  e.dataTransfer.dropEffect = 'move';
 }
-
-function onCardDrop(e) {
+async function onCardDrop(e) {
   e.preventDefault(); e.stopPropagation();
   if (dragId === null) return;
   const targetId = parseInt(this.dataset.id);
@@ -895,61 +880,51 @@ function onCardDrop(e) {
 
   const srcCol = src.col;
   const tgtCol = tgt.col;
-
-  // Remove from source col
   const srcArr = tasks.filter(t => t.col === srcCol).sort((a,b) => a.priority - b.priority);
-  const srcIdx = srcArr.findIndex(t => t.id === dragId);
-  srcArr.splice(srcIdx, 1);
+  srcArr.splice(srcArr.findIndex(t => t.id === dragId), 1);
 
-  // Insert before target in dest col
   if (srcCol === tgtCol) {
     const tgtIdx = srcArr.findIndex(t => t.id === targetId);
     srcArr.splice(tgtIdx, 0, src);
-    srcArr.forEach((t, i) => { t.priority = i + 1; t.col = tgtCol; });
+    srcArr.forEach((t,i) => { t.priority = i+1; t.col = tgtCol; });
+    await dbUpdatePriorities(srcArr);
   } else {
     src.col = tgtCol;
+    await dbUpdateTask(src.id, { col: tgtCol });
     const dstArr = tasks.filter(t => t.col === tgtCol && t.id !== dragId).sort((a,b) => a.priority - b.priority);
     const tgtIdx = dstArr.findIndex(t => t.id === targetId);
     dstArr.splice(tgtIdx, 0, src);
-    dstArr.forEach((t, i) => { t.priority = i + 1; t.col = tgtCol; });
-    srcArr.forEach((t, i) => { t.priority = i + 1; });
+    dstArr.forEach((t,i) => { t.priority = i+1; });
+    srcArr.forEach((t,i) => { t.priority = i+1; });
+    await Promise.all([dbUpdatePriorities(dstArr), dbUpdatePriorities(srcArr)]);
   }
-
-  save();
   render();
 }
 
-// Column list drag-over (empty space)
 document.querySelectorAll('.card-list').forEach(list => {
   list.addEventListener('dragover', e => {
     if (dragId === null) return;
     e.preventDefault();
     document.querySelectorAll('.card.drag-target').forEach(c => c.classList.remove('drag-target'));
     list.classList.add('drag-over');
-    e.dataTransfer.dropEffect = 'move';
   });
-  list.addEventListener('dragleave', e => {
-    if (!list.contains(e.relatedTarget)) list.classList.remove('drag-over');
-  });
-  list.addEventListener('drop', e => {
+  list.addEventListener('dragleave', e => { if (!list.contains(e.relatedTarget)) list.classList.remove('drag-over'); });
+  list.addEventListener('drop', async e => {
     list.classList.remove('drag-over');
-    if (dragId === null) return;
+    if (dragId === null || e.target.closest('.card')) return;
     e.preventDefault();
-    // Only handle if not dropped on a card (card handles it)
-    if (e.target.closest('.card')) return;
     const col = list.id.replace('list-', '');
     const src = tasks.find(t => t.id === dragId);
     if (!src) return;
     const srcCol = src.col;
-    // Remove from source
     const srcArr = tasks.filter(t => t.col === srcCol).sort((a,b) => a.priority - b.priority);
     srcArr.splice(srcArr.findIndex(t => t.id === dragId), 1);
-    srcArr.forEach((t, i) => { t.priority = i + 1; });
-    // Append to dest
+    srcArr.forEach((t,i) => { t.priority = i+1; });
     src.col = col;
     const dstArr = tasks.filter(t => t.col === col && t.id !== dragId).sort((a,b) => a.priority - b.priority);
     src.priority = dstArr.length + 1;
-    save();
+    await dbUpdateTask(src.id, { col, priority: src.priority });
+    await dbUpdatePriorities(srcArr);
     render();
   });
 });
@@ -958,23 +933,15 @@ document.querySelectorAll('.card-list').forEach(list => {
    QUICK ADD
 ══════════════════════════════════════════════════════ */
 document.querySelectorAll('.quick-add').forEach(input => {
-  input.addEventListener('keydown', e => {
+  input.addEventListener('keydown', async e => {
     if (e.key !== 'Enter') return;
     const title = input.value.trim();
     if (!title) return;
     const col = input.dataset.col;
-    const colTasks = tasks.filter(t => t.col === col);
-    const task = {
-      id: nextId++,
-      title,
-      emoji: '📌',
-      col,
-      cat: DEFAULT_CAT[col],
-      detail: '',
-      priority: colTasks.length + 1
-    };
-    tasks.push(task);
-    save();
+    const colCount = tasks.filter(t => t.col === col).length;
+    const newTask = { title, emoji: '📌', col, cat: DEFAULT_CAT[col], detail: '', priority: colCount + 1 };
+    const inserted = await dbInsertTask(newTask);
+    if (inserted) tasks.push(inserted);
     render();
     input.value = '';
   });
@@ -984,34 +951,26 @@ document.querySelectorAll('.quick-add').forEach(input => {
    ADD TASK MODAL
 ══════════════════════════════════════════════════════ */
 document.getElementById('btn-add-task').addEventListener('click', () => {
-  document.getElementById('new-title').value  = '';
-  document.getElementById('new-notes').value  = '';
-  document.getElementById('new-emoji').value  = '📌';
-  document.getElementById('new-col').value    = 'professional';
-  document.getElementById('new-cat').value    = 'bizdev';
+  document.getElementById('new-title').value = '';
+  document.getElementById('new-notes').value = '';
+  document.getElementById('new-emoji').value = '📌';
+  document.getElementById('new-col').value   = 'professional';
+  document.getElementById('new-cat').value   = 'bizdev';
   document.getElementById('add-modal').classList.remove('hidden');
-  document.getElementById('new-title').focus();
+  setTimeout(() => document.getElementById('new-title').focus(), 50);
 });
-
-document.getElementById('btn-modal-cancel').addEventListener('click', () => {
-  document.getElementById('add-modal').classList.add('hidden');
-});
-
-document.getElementById('add-modal').addEventListener('click', e => {
-  if (e.target === document.getElementById('add-modal'))
-    document.getElementById('add-modal').classList.add('hidden');
-});
-
-document.getElementById('btn-modal-save').addEventListener('click', () => {
+document.getElementById('btn-modal-cancel').addEventListener('click', () => document.getElementById('add-modal').classList.add('hidden'));
+document.getElementById('add-modal').addEventListener('click', e => { if (e.target === document.getElementById('add-modal')) document.getElementById('add-modal').classList.add('hidden'); });
+document.getElementById('btn-modal-save').addEventListener('click', async () => {
   const title = document.getElementById('new-title').value.trim();
   if (!title) { document.getElementById('new-title').focus(); return; }
   const col   = document.getElementById('new-col').value;
   const cat   = document.getElementById('new-cat').value;
   const emoji = document.getElementById('new-emoji').value.trim() || '📌';
   const notes = document.getElementById('new-notes').value.trim();
-  const colTasks = tasks.filter(t => t.col === col);
-  tasks.push({ id: nextId++, title, emoji, col, cat, detail: notes, priority: colTasks.length + 1 });
-  save();
+  const colCount = tasks.filter(t => t.col === col).length;
+  const inserted = await dbInsertTask({ title, emoji, col, cat, detail: notes, priority: colCount + 1 });
+  if (inserted) tasks.push(inserted);
   render();
   document.getElementById('add-modal').classList.add('hidden');
 });
@@ -1021,16 +980,13 @@ document.getElementById('btn-modal-save').addEventListener('click', () => {
 ══════════════════════════════════════════════════════ */
 let zoom = 1.0;
 const board = document.getElementById('board');
-
 function setZoom(z) {
   zoom = Math.min(1.5, Math.max(0.5, +z.toFixed(2)));
   board.style.transform = `scale(${zoom})`;
   document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
 }
-
 document.getElementById('btn-zoom-in').addEventListener('click',  () => setZoom(zoom + 0.1));
 document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(zoom - 0.1));
-
 document.getElementById('scroll-wrap').addEventListener('wheel', e => {
   if (!e.ctrlKey && !e.metaKey) return;
   e.preventDefault();
@@ -1046,11 +1002,7 @@ document.querySelectorAll('.filter-pill').forEach(pill => {
     pill.classList.add('active');
     activeFilter = pill.dataset.cat;
     document.querySelectorAll('.card').forEach(card => {
-      if (activeFilter === 'all') {
-        card.style.display = '';
-      } else {
-        card.style.display = card.dataset.cat === activeFilter ? '' : 'none';
-      }
+      card.style.display = (activeFilter === 'all' || card.dataset.cat === activeFilter) ? '' : 'none';
     });
   });
 });
@@ -1063,102 +1015,76 @@ document.getElementById('archive-toggle').addEventListener('click', function() {
   document.getElementById('archive-grid').classList.toggle('open');
 });
 
-
 /* ═══════════════════════════════════════════════════════
    AI PANEL
 ══════════════════════════════════════════════════════ */
-const AI_SYSTEM = `You are a productivity assistant helping a video production business owner named Evans prioritize his tasks. His goals: Professionally — maximize profitability with minimal time, close retainer deals with new clients, grow his company Zenith Creative in the industrial sector. Personally — ensure the health and moral development of his two sons, keep his wife happy, build a retirement plan.`;
-
 function openAiPanel(title) {
   document.getElementById('ai-panel-title').textContent = title;
   document.getElementById('ai-panel-content').innerHTML = '<div class="ai-loading"><div class="spinner"></div> Thinking…</div>';
   document.getElementById('ai-panel').classList.add('open');
 }
+function setAiContent(text) { document.getElementById('ai-panel-content').textContent = text; }
+function setAiError(err) { document.getElementById('ai-panel-content').innerHTML = `<span style="color:#dc2626">⚠ ${escHtml(err)}</span>`; }
+document.getElementById('btn-close-ai').addEventListener('click', () => document.getElementById('ai-panel').classList.remove('open'));
 
-function setAiContent(text) {
-  const el = document.getElementById('ai-panel-content');
-  el.textContent = text;
-}
-
-function setAiError(err) {
-  document.getElementById('ai-panel-content').innerHTML =
-    `<span style="color:#dc2626">⚠ ${escHtml(err)}</span>`;
-}
-
-document.getElementById('btn-close-ai').addEventListener('click', () => {
-  document.getElementById('ai-panel').classList.remove('open');
-});
-
-async function callClaude(prompt, userMsg) {
+async function callClaude(systemPrompt, userMsg) {
   const res = await fetch('/.netlify/functions/claude', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
-      system: prompt,
-      messages: [{ role: 'user', content: userMsg }]
-    })
+    body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1500, system: systemPrompt, messages: [{ role: 'user', content: userMsg }] })
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `HTTP ${res.status}`);
-  }
+  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `HTTP ${res.status}`); }
   const data = await res.json();
   return data.content?.[0]?.text || '';
 }
 
-/* ─── AI Recommendations ─── */
 document.getElementById('btn-ai-rec').addEventListener('click', async () => {
   openAiPanel('🤖 AI Recommendations');
   const taskList = tasks.map(t => `[${t.col}] ${t.emoji} ${t.title}`).join('\n');
   try {
-    const text = await callClaude(
-      AI_SYSTEM,
-      `Here are all my current tasks:\n\n${taskList}\n\nIdentify which tasks could be meaningfully completed or significantly assisted by current AI tools available today. For each task, name the specific AI tool(s) and estimate the time savings per task. Be specific and practical.`
-    );
+    const text = await callClaude(AI_SYSTEM, `Here are all my current tasks:\n\n${taskList}\n\nIdentify which tasks could be meaningfully completed or significantly assisted by current AI tools. For each, name the specific tool(s) and estimate the time savings.`);
     setAiContent(text);
   } catch(e) { setAiError(e.message); }
 });
 
-/* ─── Find Duplicates ─── */
 document.getElementById('btn-find-dup').addEventListener('click', async () => {
   openAiPanel('🔍 Find Duplicates');
   const taskList = tasks.map(t => `[id:${t.id}] ${t.title}`).join('\n');
   try {
-    const text = await callClaude(
-      AI_SYSTEM,
-      `Here is my full task list:\n\n${taskList}\n\nIdentify pairs or groups of tasks that represent the same objective and could be merged into one action. Explain why they overlap and suggest a merged version of each pair/group.`
-    );
+    const text = await callClaude(AI_SYSTEM, `Here is my full task list:\n\n${taskList}\n\nIdentify pairs or groups of tasks that represent the same objective and could be merged. Explain why they overlap and suggest a merged version of each pair/group.`);
     setAiContent(text);
   } catch(e) { setAiError(e.message); }
 });
 
-/* ─── Re-prioritize ─── */
 document.getElementById('btn-reprioritize').addEventListener('click', async () => {
-  openAiPanel('✦ Re-prioritize');
-  const byCol = {
-    professional: getCol('professional').map(t => `  ${t.priority}. ${t.emoji} ${t.title} [${t.cat}]`).join('\n'),
-    personal:     getCol('personal').map(t => `  ${t.priority}. ${t.emoji} ${t.title} [${t.cat}]`).join('\n'),
-    reminders:    getCol('reminders').map(t => `  ${t.priority}. ${t.emoji} ${t.title} [${t.cat}]`).join('\n'),
-  };
-  const taskList = `PROFESSIONAL:\n${byCol.professional}\n\nPERSONAL:\n${byCol.personal}\n\nREMINDERS:\n${byCol.reminders}`;
+  openAiPanel('✦ Re-prioritizing your board…');
+  const colData = {};
+  ['professional','personal','reminders'].forEach(col => {
+    colData[col] = getCol(col).map(t => ({ id: t.id, title: t.title, cat: t.cat }));
+  });
   try {
     const text = await callClaude(
       AI_SYSTEM,
-      `Here are my current tasks organized by column:\n\n${taskList}\n\nBased on Evans's goals (maximize profitability, close retainers, grow in the industrial sector; family health and happiness; retirement plan), suggest a re-ordered priority list for each column. Number each task in your recommended order and explain the reasoning briefly. Do not remove any tasks. This is a recommendation only — Evans will decide whether to apply it.`
+      `Here are my current tasks by column:\n\n${JSON.stringify(colData, null, 2)}\n\nRe-order each column by priority based on Evans's goals. Return ONLY a valid JSON object with no explanation, no markdown, no code blocks — exactly this format:\n{"professional":[id1,id2,...],"personal":[id1,id2,...],"reminders":[id1,id2,...]}\nInclude every task id exactly once per column.`
     );
-    setAiContent(text);
-  } catch(e) { setAiError(e.message); }
+    const clean = text.replace(/```json?/g,'').replace(/```/g,'').trim();
+    const newOrder = JSON.parse(clean);
+    for (const col of ['professional','personal','reminders']) {
+      const ids = newOrder[col];
+      if (!Array.isArray(ids)) continue;
+      ids.forEach((id, i) => { const t = tasks.find(t => t.id === id); if (t) t.priority = i + 1; });
+      await dbUpdatePriorities(tasks.filter(t => t.col === col));
+    }
+    render();
+    setAiContent('✓ Board re-prioritized.');
+    setTimeout(() => document.getElementById('ai-panel').classList.remove('open'), 2000);
+  } catch(e) { setAiError('Re-prioritize failed: ' + e.message); }
 });
-
 
 /* ═══════════════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════════════ */
-loadData();
-render();
-renderArchive();
+initAuth();
 </script>
 </body>
 </html>
